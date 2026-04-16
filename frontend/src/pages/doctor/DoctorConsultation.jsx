@@ -1,11 +1,82 @@
-import VideoConsultationPlaceholder from '../../components/VideoConsultationPlaceholder';
-import { ChevronLeft, Send, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronLeft, Loader2, Send, Save } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import TelemedicineRoom from '../../components/TelemedicineRoom';
+import { AppointmentService, TelemedicineService } from '../../services/api';
 
 export default function DoctorConsultation() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('notes');
+  const [appointment, setAppointment] = useState(null);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const user = (() => {
+    try {
+      const raw = localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  useEffect(() => {
+    const loadConsultation = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const appointmentsResponse = await AppointmentService.getAppointments();
+        const appointments = Array.isArray(appointmentsResponse)
+          ? appointmentsResponse
+          : Array.isArray(appointmentsResponse?.data)
+            ? appointmentsResponse.data
+            : [];
+
+        const appointmentData = appointments.find((item) => item._id === id);
+        if (!appointmentData) {
+          throw new Error('Appointment not found');
+        }
+
+        setAppointment(appointmentData);
+
+        let sessionData = null;
+        try {
+          const existingSessionResponse = await TelemedicineService.getSessionByAppointment(id);
+          sessionData = existingSessionResponse?.data || null;
+        } catch {
+          sessionData = null;
+        }
+
+        if (!sessionData) {
+          const createResponse = await TelemedicineService.createSession({
+            appointmentId: id,
+            patientId: appointmentData.patientId?._id || appointmentData.patientId,
+            doctorId: appointmentData.doctorId?._id || appointmentData.doctorId || user?.id,
+          });
+          sessionData = createResponse?.data || createResponse;
+        }
+
+        setSession(sessionData);
+      } catch (err) {
+        setError(err?.response?.data?.message || err?.message || 'Failed to load consultation');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadConsultation();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4 h-[calc(100vh-120px)] flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-gray-500">Loading consultation...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col space-y-4">
@@ -24,12 +95,29 @@ export default function DoctorConsultation() {
         </div>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+          {error}
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-6 h-full flex-1 min-h-0 w-full">
         <div className="flex-1 min-h-0 h-full w-full">
-          <VideoConsultationPlaceholder isDoctor={true} doctorName="Dr. Sarah Jenkins" patientName="John Doe" />
+          {session?.meetingLink ? (
+            <TelemedicineRoom
+              sessionId={session._id}
+              meetingLink={session.meetingLink}
+              patientName={appointment?.patientId?.name || 'Patient'}
+              doctorName={appointment?.doctorId?.name || user?.name || 'Doctor'}
+            />
+          ) : (
+            <div className="w-full h-full min-h-162.5 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-gray-500">
+              Consultation room is not available yet.
+            </div>
+          )}
         </div>
 
-        <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 flex flex-col bg-white border border-gray-100 shadow-sm overflow-hidden h-full rounded-2xl md:rounded-3xl">
+        <div className="w-full lg:w-100 xl:w-112.5 shrink-0 flex flex-col bg-white border border-gray-100 shadow-sm overflow-hidden h-full rounded-2xl md:rounded-3xl">
           <div className="flex border-b border-gray-100 bg-gray-50/50">
             <button 
               onClick={() => setActiveTab('notes')}
@@ -66,14 +154,14 @@ export default function DoctorConsultation() {
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Medication</label>
                     <textarea 
-                      className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-[140px] font-medium shadow-sm leading-relaxed"
+                      className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-35 font-medium shadow-sm leading-relaxed"
                       placeholder="1. Lisinopril 10mg, take 1 tablet daily.&#10;2. Vitamin D3 1000IU daily."
                     ></textarea>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Follow-up Advice</label>
                      <textarea 
-                      className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-[100px] font-medium shadow-sm leading-relaxed"
+                      className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-25 font-medium shadow-sm leading-relaxed"
                       placeholder="Reduce sodium intake. Return to clinic in 3 weeks."
                     ></textarea>
                   </div>

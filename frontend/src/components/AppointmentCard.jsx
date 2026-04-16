@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Video, FileText, CheckCircle2, XCircle, MoreVertical, MapPin } from 'lucide-react';
 
 export default function AppointmentCard({ appointment, role = 'patient' }) {
+  const navigate = useNavigate();
   const paymentStatus = (appointment.paymentStatus || 'pending').toLowerCase();
   const [showMenu, setShowMenu] = useState(false);
   const isPatientActionsVisible = role === 'patient' && (appointment.canCancel || appointment.canPay);
@@ -38,6 +40,12 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
     if (paymentStatus === 'completed') return 'Paid';
     if (paymentStatus === 'failed') return 'Payment Failed';
     return 'Payment Pending';
+  };
+
+  const handleJoinConsultation = () => {
+    const appointmentId = appointment.id || appointment._id;
+    if (!appointmentId) return;
+    navigate(`/patient/consultation/${appointmentId}`);
   };
 
   return (
@@ -129,7 +137,10 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
       </div>
 
       {appointment.status === 'Upcoming' && appointment.type.includes('Video') && (
-        <button className="w-full bg-accent hover:bg-green-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-accent/20">
+        <button 
+          onClick={handleJoinConsultation}
+          className="w-full bg-accent hover:bg-green-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-accent/20"
+        >
           <Video className="w-5 h-5" />
           Join Consultation
         </button>
