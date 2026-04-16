@@ -45,6 +45,9 @@ export const UserService = {
 export const DoctorService = {
   getDoctors: (params) => api.get('/doctors', { params }),
   getDoctorById: (id) => api.get(`/doctors/${id}`),
+  getAvailability: (id) => api.get(`/doctors/${id}/availability`),
+  updateDoctor: (id, data) => api.put(`/doctors/${id}`, data),
+  verifyDoctor: (id) => api.put(`/doctors/${id}/verify`),
 };
 
 export const AppointmentService = {

@@ -2,7 +2,8 @@ const doctorService = require('../services/doctorService');
 
 const getDoctors = async (req, res) => {
   try {
-    const doctors = await doctorService.getAllDoctors();
+    const { specialization, verified } = req.query;
+    const doctors = await doctorService.getAllDoctors({ specialization, verified });
     res.json(doctors);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -22,6 +23,7 @@ const getDoctor = async (req, res) => {
 const updateDoctor = async (req, res) => {
   try {
     const doctor = await doctorService.updateDoctor(req.params.id, req.body);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
     res.json(doctor);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -31,6 +33,7 @@ const updateDoctor = async (req, res) => {
 const verifyDoctor = async (req, res) => {
   try {
     const doctor = await doctorService.verifyDoctor(req.params.id);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
     res.json(doctor);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -40,6 +43,7 @@ const verifyDoctor = async (req, res) => {
 const getAvailability = async (req, res) => {
   try {
     const availability = await doctorService.getAvailability(req.params.id);
+    if (!availability) return res.status(404).json({ message: 'Doctor not found' });
     res.json(availability);
   } catch (error) {
     res.status(500).json({ message: error.message });
