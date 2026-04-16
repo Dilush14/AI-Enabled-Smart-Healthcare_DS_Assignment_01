@@ -1,0 +1,51 @@
+version: '3.8'
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+  user-service:
+    build: ./user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/healthcare
+      - JWT_SECRET=your_jwt_secret
+  doctor-service:
+    build: ./doctor-service
+    ports:
+      - "3002:3002"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/healthcare
+      - JWT_SECRET=your_jwt_secret
+  appointment-service:
+    build: ./appointment-service
+    ports:
+      - "3003:3003"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/healthcare
+      - JWT_SECRET=your_jwt_secret
+  telemedicine-service:
+    build: ./telemedicine-service
+    ports:
+      - "3004:3004"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/healthcare
+      - JWT_SECRET=your_jwt_secret
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "3005:3005"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/healthcare
+      - JWT_SECRET=your_jwt_secret
+  mongo:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+volumes:
+  mongo_data:
