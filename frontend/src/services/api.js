@@ -74,6 +74,7 @@ export const TelemedicineService = {
 export const NotificationService = {
   getNotifications: () => api.get('/notifications'),
   markAsRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllAsRead: () => api.put('/notifications/read-all'),
 };
 
 export default api;

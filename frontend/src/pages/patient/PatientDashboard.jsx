@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, User, FileText, Search, Bell } from 'lucide-react';
-import { AppointmentService, DoctorService } from '../../services/api';
+import { Calendar, User, FileText, Search } from 'lucide-react';
+import { AppointmentService, DoctorService, PaymentService } from '../../services/api';
 import AppointmentCard from '../../components/AppointmentCard';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function PatientDashboard() {
   const currentUser = (() => {
@@ -15,8 +16,61 @@ export default function PatientDashboard() {
 
   const [appointments, setAppointments] = useState([]);
   const [doctorsById, setDoctorsById] = useState({});
+  const [actionLoadingId, setActionLoadingId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const processPayment = async (appointmentId) => {
+    const paymentResponse = await PaymentService.processPayment({
+      appointmentId,
+      amount: 150,
+      currency: 'usd',
+      paymentMethod: 'card',
+      paymentMethodId: 'pm_card_visa',
+    });
+
+    const paymentData = paymentResponse?.data || paymentResponse;
+    const paymentRecord = paymentData?.payment || paymentData;
+
+    if (!paymentRecord?._id) {
+      throw new Error('Payment record was not created');
+    }
+
+    if (paymentRecord.status !== 'completed') {
+      const verifyResponse = await PaymentService.verifyPayment(paymentRecord._id);
+      const verified = verifyResponse?.data || verifyResponse;
+      const finalStatus = (verified?.status || '').toLowerCase();
+      if (finalStatus !== 'completed') {
+        throw new Error('Payment could not be completed');
+      }
+    }
+  };
+
+  const handleCancelAppointment = async (appointmentId) => {
+    try {
+      setActionLoadingId(appointmentId);
+      setError('');
+      await AppointmentService.cancelAppointment(appointmentId);
+      await loadAppointments();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to cancel appointment');
+    } finally {
+      setActionLoadingId('');
+    }
+  };
+
+  const handlePayAppointment = async (appointmentId) => {
+    try {
+      setActionLoadingId(appointmentId);
+      setError('');
+      await processPayment(appointmentId);
+      await loadAppointments();
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || 'Payment failed');
+    } finally {
+      setActionLoadingId('');
+    }
+  };
 
   const loadAppointments = async () => {
     try {
@@ -104,10 +158,16 @@ export default function PatientDashboard() {
           time: app.time || 'Time not set',
           type,
           status: mapStatus(app.status),
+          paymentStatus: (app.paymentStatus || 'pending').toLowerCase(),
+          canCancel: (app.status || '').toLowerCase() !== 'cancelled' && (app.status || '').toLowerCase() !== 'completed',
+          canPay: (app.status || '').toLowerCase() === 'confirmed' && (app.paymentStatus || 'pending').toLowerCase() !== 'completed',
+          onCancel: () => handleCancelAppointment(app._id),
+          onPay: () => handlePayAppointment(app._id),
+          actionLoading: actionLoadingId === app._id,
           doctorImage,
         };
       }),
-    [appointments, doctorsById]
+    [appointments, doctorsById, actionLoadingId]
   );
 
   const upcomingAppointments = mappedAppointments.filter((app) => app.status === 'Upcoming');
@@ -129,10 +189,7 @@ export default function PatientDashboard() {
               className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary w-full md:w-64 bg-white"
             />
           </div>
-          <button className="bg-white p-2 border border-gray-200 rounded-xl text-gray-600 hover:text-primary transition-colors relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
-          </button>
+          <NotificationBell />
         </div>
       </div>
 
