@@ -1,25 +1,145 @@
 const Doctor = require('../models/Doctor');
+const mongoose = require('mongoose');
 
 class DoctorService {
-  async getAllDoctors() {
-    return await Doctor.find().populate('userId');
+  toObjectId(id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    return new mongoose.Types.ObjectId(id);
+  }
+
+  async getDoctorUsers(filters = {}) {
+    const usersCollection = mongoose.connection.collection('users');
+    const userQuery = { role: 'doctor' };
+
+    if (filters.specialization) {
+      userQuery.specialization = { $regex: filters.specialization, $options: 'i' };
+    }
+
+    if (filters.verified === 'true') {
+      userQuery.isVerified = true;
+    }
+
+    return usersCollection.find(userQuery).toArray();
+  }
+
+  mapUserToDoctor(user) {
+    return {
+      _id: user._id,
+      userId: user,
+      specialization: user.specialization || 'General Physician',
+      licenseNumber: user.licenseNumber || 'N/A',
+      isVerified: user.isVerified || false,
+      experience: user.experience || 0,
+      rating: user.rating || 4.9,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      availability: Array.isArray(user.availability) ? user.availability : [],
+      fallbackSource: 'user-service',
+    };
+  }
+
+  async getAllDoctors(filters = {}) {
+    const query = {};
+
+    if (filters.specialization) {
+      query.specialization = new RegExp(filters.specialization, 'i');
+    }
+
+    if (filters.verified === 'true') {
+      query.isVerified = true;
+    }
+
+    const doctors = await Doctor.find(query).populate('userId');
+    if (doctors.length > 0) {
+      return doctors;
+    }
+
+    const doctorUsers = await this.getDoctorUsers(filters);
+    return doctorUsers.map((user) => this.mapUserToDoctor(user));
   }
 
   async getDoctorById(id) {
-    return await Doctor.findById(id).populate('userId');
+    const doctor = await Doctor.findById(id).populate('userId');
+    if (doctor) {
+      return doctor;
+    }
+
+    const userId = this.toObjectId(id);
+    if (!userId) {
+      return null;
+    }
+
+    const usersCollection = mongoose.connection.collection('users');
+    const user = await usersCollection.findOne({
+      _id: userId,
+      role: 'doctor',
+    });
+
+    return user ? this.mapUserToDoctor(user) : null;
   }
 
   async updateDoctor(id, updates) {
-    return await Doctor.findByIdAndUpdate(id, updates, { new: true });
+    const updatedDoctor = await Doctor.findByIdAndUpdate(id, updates, { new: true });
+    if (updatedDoctor) {
+      return updatedDoctor;
+    }
+
+    const userId = this.toObjectId(id);
+    if (!userId) {
+      return null;
+    }
+
+    const usersCollection = mongoose.connection.collection('users');
+    await usersCollection.updateOne(
+      { _id: userId, role: 'doctor' },
+      { $set: updates }
+    );
+
+    const user = await usersCollection.findOne({ _id: userId, role: 'doctor' });
+    return user ? this.mapUserToDoctor(user) : null;
   }
 
   async verifyDoctor(id) {
-    return await Doctor.findByIdAndUpdate(id, { isVerified: true }, { new: true });
+    const updatedDoctor = await Doctor.findByIdAndUpdate(id, { isVerified: true }, { new: true });
+    if (updatedDoctor) {
+      return updatedDoctor;
+    }
+
+    const userId = this.toObjectId(id);
+    if (!userId) {
+      return null;
+    }
+
+    const usersCollection = mongoose.connection.collection('users');
+    await usersCollection.updateOne(
+      { _id: userId, role: 'doctor' },
+      { $set: { isVerified: true } }
+    );
+
+    const user = await usersCollection.findOne({ _id: userId, role: 'doctor' });
+    return user ? this.mapUserToDoctor(user) : null;
   }
 
   async getAvailability(id) {
     const doctor = await Doctor.findById(id);
-    return doctor.availability;
+    if (doctor) {
+      return doctor.availability;
+    }
+
+    const userId = this.toObjectId(id);
+    if (!userId) {
+      return null;
+    }
+
+    const usersCollection = mongoose.connection.collection('users');
+    const user = await usersCollection.findOne({
+      _id: userId,
+      role: 'doctor',
+    });
+
+    return user ? user.availability || [] : null;
   }
 }
 
