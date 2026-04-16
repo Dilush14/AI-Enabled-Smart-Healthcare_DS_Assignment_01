@@ -18,8 +18,23 @@ export default function UserManagement() {
         DoctorService.getDoctors(),
         UserService.getAllUsers(),
       ]);
-      setDoctors(Array.isArray(doctorsRes) ? doctorsRes : []);
-      setPatients(Array.isArray(usersRes) ? usersRes.filter((u) => u.role === 'patient') : []);
+      const doctorProfiles = Array.isArray(doctorsRes) ? doctorsRes : [];
+      const users = Array.isArray(usersRes) ? usersRes : [];
+      const doctorUsers = users.filter((u) => u.role === 'doctor');
+
+      const mergedDoctors = doctorProfiles.length
+        ? doctorProfiles
+        : doctorUsers.map((user) => ({
+            _id: user._id,
+            userId: user,
+            specialization: user.specialization || 'General Physician',
+            licenseNumber: user.licenseNumber || 'N/A',
+            isVerified: user.isVerified || false,
+            createdAt: user.createdAt,
+          }));
+
+      setDoctors(mergedDoctors);
+      setPatients(users.filter((u) => u.role === 'patient'));
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load users');
     } finally {
