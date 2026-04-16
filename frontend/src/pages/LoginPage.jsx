@@ -1,17 +1,42 @@
 import { Activity, Mail, Lock, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { UserService } from '../services/api';
+
+const FIXED_ADMIN = {
+  email: 'admin@medikaline.com',
+  password: 'Admin@123',
+};
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [role, setRole] = useState('patient');
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = (e) => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Simulate login based on role
-    if (role === 'patient') navigate('/patient/dashboard');
-    if (role === 'doctor') navigate('/doctor/dashboard');
-    if (role === 'admin') navigate('/admin/dashboard');
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await UserService.login(form);
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+
+      if (response.user?.role === 'doctor') navigate('/doctor/dashboard');
+      else if (response.user?.role === 'admin') navigate('/admin/dashboard');
+      else navigate('/patient/dashboard');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,19 +58,11 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow-xl shadow-gray-200/50 sm:rounded-3xl sm:px-10 border border-gray-100">
-          {/* Role Selector Box for Demo Purposes */}
-          <div className="mb-6 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
-            <label className="block text-sm font-bold text-blue-800 mb-2">Select Role to Login As (Demo):</label>
-            <select 
-              value={role} 
-              onChange={(e) => setRole(e.target.value)}
-              className="mt-1 block w-full pl-3 pr-10 py-2.5 text-base border-gray-200 bg-white focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-xl font-medium"
-            >
-              <option value="patient">Patient</option>
-              <option value="doctor">Doctor</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
+          {error && (
+            <p className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
 
           <form className="space-y-5" onSubmit={handleLogin}>
             <div>
@@ -62,7 +79,8 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="email"
                   required
-                  defaultValue={`demo@${role}.com`}
+                  value={form.email}
+                  onChange={handleChange}
                   className="focus:ring-2 focus:ring-primary/20 focus:border-primary block w-full pl-10 sm:text-sm border-gray-200 rounded-xl h-12 bg-gray-50 border outline-none transition-all"
                 />
               </div>
@@ -82,7 +100,8 @@ export default function LoginPage() {
                   type="password"
                   autoComplete="current-password"
                   required
-                  defaultValue="password123"
+                  value={form.password}
+                  onChange={handleChange}
                   className="focus:ring-2 focus:ring-primary/20 focus:border-primary block w-full pl-10 sm:text-sm border-gray-200 rounded-xl h-12 bg-gray-50 border outline-none transition-all"
                 />
               </div>
@@ -111,9 +130,10 @@ export default function LoginPage() {
             <div className="pt-2">
               <button
                 type="submit"
+                disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-transparent rounded-xl shadow-sm shadow-primary/30 text-sm font-bold text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all hover:-translate-y-0.5"
                >
-                Sign in
+                {loading ? 'Signing in...' : 'Sign in'}
                 <ArrowRight className="w-5 h-5" />
               </button>
             </div>

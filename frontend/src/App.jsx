@@ -47,8 +47,33 @@ const adminLinks = [
   { name: 'Overview', path: '/admin/dashboard', icon: Activity },
   { name: 'Users', path: '/admin/users', icon: Users },
   { name: 'Analytics', path: '/admin/analytics', icon: PieChart },
-  { name: 'Settings', path: '/admin/settings', icon: Settings },
 ];
+
+const getStoredUser = () => {
+  try {
+    const rawUser = localStorage.getItem('user');
+    return rawUser ? JSON.parse(rawUser) : null;
+  } catch {
+    return null;
+  }
+};
+
+function ProtectedRoute({ allowedRoles, children }) {
+  const token = localStorage.getItem('token');
+  const user = getStoredUser();
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    if (user.role === 'doctor') return <Navigate to="/doctor/dashboard" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+    return <Navigate to="/patient/dashboard" replace />;
+  }
+
+  return children;
+}
 
 function App() {
   return (
@@ -64,7 +89,14 @@ function App() {
         </Route>
 
         {/* Patient Routes */}
-        <Route path="/patient" element={<DashboardLayout role="Patient" links={patientLinks} />}>
+        <Route
+          path="/patient"
+          element={
+            <ProtectedRoute allowedRoles={['patient']}>
+              <DashboardLayout role="Patient" links={patientLinks} />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/patient/dashboard" replace />} />
           <Route path="dashboard" element={<PatientDashboard />} />
           <Route path="doctors" element={<BrowseDoctors />} />
@@ -76,7 +108,14 @@ function App() {
         </Route>
 
         {/* Doctor Routes */}
-        <Route path="/doctor" element={<DashboardLayout role="Doctor" links={doctorLinks} />}>
+        <Route
+          path="/doctor"
+          element={
+            <ProtectedRoute allowedRoles={['doctor']}>
+              <DashboardLayout role="Doctor" links={doctorLinks} />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/doctor/dashboard" replace />} />
           <Route path="dashboard" element={<DoctorDashboard />} />
           <Route path="schedule" element={<ManageSchedule />} />
@@ -85,12 +124,18 @@ function App() {
         </Route>
 
         {/* Admin Routes */}
-        <Route path="/admin" element={<DashboardLayout role="Admin" links={adminLinks} />}>
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout role="Admin" links={adminLinks} />
+            </ProtectedRoute>
+          }
+        >
            <Route index element={<Navigate to="/admin/dashboard" replace />} />
            <Route path="dashboard" element={<AdminDashboard />} />
            <Route path="users" element={<UserManagement />} />
            <Route path="analytics" element={<AnalyticsOverview />} />
-           <Route path="settings" element={<PatientSettings />} />
         </Route>
       </Routes>
     </Router>

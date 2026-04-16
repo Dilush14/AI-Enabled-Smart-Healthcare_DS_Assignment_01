@@ -1,72 +1,43 @@
 import { Search, Filter, SlidersHorizontal } from 'lucide-react';
 import DoctorCard from '../../components/DoctorCard';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { DoctorService } from '../../services/api';
 
 export default function BrowseDoctors() {
   const [activeSpecialty, setActiveSpecialty] = useState('All');
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const specialties = ['All', 'Cardiologist', 'Dermatologist', 'Pediatrician', 'Neurologist', 'Orthopedic', 'Dentist', 'General Physician'];
-  
-  const doctors = [
-    {
-      id: 1,
-      name: 'Dr. Sarah Jenkins',
-      specialty: 'Cardiologist',
-      rating: 4.9,
-      experience: 12,
-      location: 'New York, USA',
-      image: 'https://ui-avatars.com/api/?name=Sarah+Jenkins&background=0EA5E9&color=fff'
-    },
-    {
-      id: 2,
-      name: 'Dr. Michael Chen',
-      specialty: 'Dermatologist',
-      rating: 4.8,
-      experience: 8,
-      location: 'San Francisco, USA',
-      image: 'https://ui-avatars.com/api/?name=Michael+Chen&background=0EA5E9&color=fff'
-    },
-    {
-      id: 3,
-      name: 'Dr. Emily Carter',
-      specialty: 'Pediatrician',
-      rating: 4.9,
-      experience: 15,
-      location: 'Chicago, USA',
-      image: 'https://ui-avatars.com/api/?name=Emily+Carter&background=0EA5E9&color=fff'
-    },
-    {
-      id: 4,
-      name: 'Dr. Robert Wilson',
-      specialty: 'Neurologist',
-      rating: 4.7,
-      experience: 20,
-      location: 'Boston, USA',
-      image: 'https://ui-avatars.com/api/?name=Robert+Wilson&background=0EA5E9&color=fff'
-    },
-    {
-      id: 5,
-      name: 'Dr. Amanda Lee',
-      specialty: 'Cardiologist',
-      rating: 4.9,
-      experience: 10,
-      location: 'Seattle, USA',
-      image: 'https://ui-avatars.com/api/?name=Amanda+Lee&background=0EA5E9&color=fff'
-    },
-    {
-      id: 6,
-      name: 'Dr. James Smith',
-      specialty: 'Dentist',
-      rating: 4.6,
-      experience: 5,
-      location: 'Austin, USA',
-      image: 'https://ui-avatars.com/api/?name=James+Smith&background=0EA5E9&color=fff'
-    }
-  ];
 
-  const filteredDoctors = activeSpecialty === 'All' 
-    ? doctors 
-    : doctors.filter(d => d.specialty === activeSpecialty);
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const params = activeSpecialty === 'All' ? {} : { specialization: activeSpecialty };
+        const response = await DoctorService.getDoctors(params);
+        const normalizedDoctors = Array.isArray(response)
+          ? response.map((doctor) => ({
+              ...doctor,
+              id: doctor._id || doctor.id,
+              name: doctor.userId?.name || doctor.name,
+              specialty: doctor.specialization || doctor.specialty,
+            }))
+          : [];
+        setDoctors(normalizedDoctors);
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Failed to load doctors');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDoctors();
+  }, [activeSpecialty]);
+
+  const filteredDoctors = doctors;
 
   return (
     <div className="space-y-6">
@@ -113,9 +84,11 @@ export default function BrowseDoctors() {
 
       <div className="py-4">
         <p className="text-gray-500 font-medium mb-4">Showing {filteredDoctors.length} doctors</p>
+        {error && <p className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        {loading && <p className="mb-4 text-sm text-gray-500">Loading doctors...</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredDoctors.map(doctor => (
-            <DoctorCard key={doctor.id} doctor={doctor} />
+            <DoctorCard key={doctor._id || doctor.id} doctor={doctor} />
           ))}
         </div>
       </div>

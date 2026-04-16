@@ -1,8 +1,18 @@
 const Doctor = require('../models/Doctor');
 
 class DoctorService {
-  async getAllDoctors() {
-    return await Doctor.find().populate('userId');
+  async getAllDoctors(filters = {}) {
+    const query = {};
+
+    if (filters.specialization) {
+      query.specialization = new RegExp(filters.specialization, 'i');
+    }
+
+    if (filters.verified === 'true') {
+      query.isVerified = true;
+    }
+
+    return await Doctor.find(query).populate('userId');
   }
 
   async getDoctorById(id) {
@@ -19,7 +29,7 @@ class DoctorService {
 
   async getAvailability(id) {
     const doctor = await Doctor.findById(id);
-    return doctor.availability;
+    return doctor ? doctor.availability : null;
   }
 }
 
