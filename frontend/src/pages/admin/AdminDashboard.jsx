@@ -24,8 +24,23 @@ export default function AdminDashboard() {
           PaymentService.getPaymentsHistory(),
         ]);
 
-        setUsers(Array.isArray(usersRes) ? usersRes : []);
-        setDoctors(Array.isArray(doctorsRes) ? doctorsRes : []);
+        const users = Array.isArray(usersRes) ? usersRes : [];
+        const doctorProfiles = Array.isArray(doctorsRes) ? doctorsRes : [];
+        const doctorUsers = users.filter((user) => user.role === 'doctor');
+
+        const mergedDoctors = doctorProfiles.length
+          ? doctorProfiles
+          : doctorUsers.map((user) => ({
+              _id: user._id,
+              userId: user,
+              specialization: user.specialization || 'General Physician',
+              licenseNumber: user.licenseNumber || 'N/A',
+              isVerified: user.isVerified || false,
+              createdAt: user.createdAt,
+            }));
+
+        setUsers(users);
+        setDoctors(mergedDoctors);
         setAppointments(Array.isArray(appointmentsRes) ? appointmentsRes : []);
         setPayments(Array.isArray(paymentsRes) ? paymentsRes : []);
       } catch (err) {
