@@ -18,8 +18,21 @@ export default function AnalyticsOverview() {
           AppointmentService.getAppointments(),
           PaymentService.getPaymentsHistory(),
         ]);
-        setAppointments(Array.isArray(appointmentsRes) ? appointmentsRes : []);
-        setPayments(Array.isArray(paymentsRes) ? paymentsRes : []);
+
+        const appointments = Array.isArray(appointmentsRes)
+          ? appointmentsRes
+          : Array.isArray(appointmentsRes?.data)
+            ? appointmentsRes.data
+            : [];
+
+        const payments = Array.isArray(paymentsRes)
+          ? paymentsRes
+          : Array.isArray(paymentsRes?.data)
+            ? paymentsRes.data
+            : [];
+
+        setAppointments(appointments);
+        setPayments(payments);
       } catch (err) {
         setError(err?.response?.data?.message || 'Failed to load analytics');
       } finally {

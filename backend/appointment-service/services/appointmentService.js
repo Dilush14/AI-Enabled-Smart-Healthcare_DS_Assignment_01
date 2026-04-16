@@ -2,7 +2,76 @@ const Appointment = require('../models/Appointment');
 const axios = require('axios');
 const mongoose = require('mongoose');
 
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006/api/notifications/internal';
+const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || 'medikaline-internal-token';
+
+async function sendNotification(payload) {
+  try {
+    await axios.post(NOTIFICATION_SERVICE_URL, payload, {
+      headers: {
+        'x-service-token': INTERNAL_SERVICE_TOKEN,
+      },
+    });
+  } catch (error) {
+    console.error('Notification dispatch failed:', error.message);
+  }
+}
+
 class AppointmentService {
+  async getUserById(userId) {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return null;
+    }
+
+    const usersCollection = mongoose.connection?.db?.collection('users');
+    if (!usersCollection) {
+      return null;
+    }
+
+    return usersCollection.findOne({ _id: new mongoose.Types.ObjectId(userId) });
+  }
+
+  async getDoctorContext(doctorId) {
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return { doctor: null, user: null };
+    }
+
+    const doctorsCollection = mongoose.connection?.db?.collection('doctors');
+    const usersCollection = mongoose.connection?.db?.collection('users');
+    if (!doctorsCollection || !usersCollection) {
+      return { doctor: null, user: null };
+    }
+
+    const doctor = await doctorsCollection.findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
+    if (!doctor?.userId) {
+      return { doctor, user: null };
+    }
+
+    const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctor.userId) });
+    return { doctor, user };
+  }
+
+  formatAppointmentLabel(appointment) {
+    const date = appointment?.date ? new Date(appointment.date) : null;
+    if (!date || Number.isNaN(date.getTime())) {
+      return appointment?.time ? `at ${appointment.time}` : 'for your appointment';
+    }
+
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${appointment.time}`;
+  }
+
+  async getLatestPaymentForAppointment(appointmentId) {
+    const paymentsCollection = mongoose.connection?.db?.collection('payments');
+    if (!paymentsCollection) {
+      return null;
+    }
+
+    return paymentsCollection.findOne(
+      { appointmentId: new mongoose.Types.ObjectId(appointmentId) },
+      { sort: { createdAt: -1 } }
+    );
+  }
+
   async enrichAppointmentsWithPatients(appointments) {
     if (!Array.isArray(appointments) || appointments.length === 0) {
       return [];
@@ -53,6 +122,50 @@ class AppointmentService {
     });
   }
 
+  async enrichAppointmentsWithPayments(appointments) {
+    if (!Array.isArray(appointments) || appointments.length === 0) {
+      return [];
+    }
+
+    const paymentsCollection = mongoose.connection?.db?.collection('payments');
+    if (!paymentsCollection) {
+      return appointments;
+    }
+
+    const appointmentIds = appointments
+      .map((appointment) => appointment._id?.toString())
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    if (appointmentIds.length === 0) {
+      return appointments;
+    }
+
+    const objectIds = appointmentIds.map((id) => new mongoose.Types.ObjectId(id));
+    const payments = await paymentsCollection
+      .find({ appointmentId: { $in: objectIds } })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const paymentsByAppointment = payments.reduce((acc, payment) => {
+      const key = payment.appointmentId?.toString();
+      if (key && !acc[key]) {
+        acc[key] = payment;
+      }
+      return acc;
+    }, {});
+
+    return appointments.map((appointment) => {
+      const plain = appointment.toObject ? appointment.toObject() : appointment;
+      const payment = paymentsByAppointment[plain._id?.toString()];
+      return {
+        ...plain,
+        paymentStatus: payment?.status || 'pending',
+        paymentId: payment?._id,
+        paymentAmount: payment?.amount,
+      };
+    });
+  }
+
   // Get appointments based on user role
   async getAppointments(userId, role, filter = {}) {
     let query = {};
@@ -77,7 +190,8 @@ class AppointmentService {
     const appointments = await Appointment.find(query)
       .sort({ date: -1, time: -1 });
 
-    return this.enrichAppointmentsWithPatients(appointments);
+    const withPatients = await this.enrichAppointmentsWithPatients(appointments);
+    return this.enrichAppointmentsWithPayments(withPatients);
   }
 
   // Validate appointment data
@@ -151,6 +265,36 @@ class AppointmentService {
 
     await appointment.save();
 
+    const patient = await this.getUserById(appointment.patientId);
+    const { user: doctorUser } = await this.getDoctorContext(appointment.doctorId);
+    const appointmentLabel = this.formatAppointmentLabel(appointment);
+
+    await Promise.all([
+      sendNotification({
+        userId: appointment.patientId,
+        title: 'Appointment booked',
+        type: 'appointment_booked',
+        message: `Your appointment ${appointmentLabel} has been booked and is waiting for doctor acceptance.`,
+        metadata: {
+          appointmentId: appointment._id,
+          doctorId: appointment.doctorId,
+          status: 'pending',
+          patientName: patient?.name || '',
+        },
+      }),
+      doctorUser?._id ? sendNotification({
+        userId: doctorUser._id,
+        title: 'New appointment request',
+        type: 'appointment_booked',
+        message: `${patient?.name || 'A patient'} requested an appointment ${appointmentLabel}.`,
+        metadata: {
+          appointmentId: appointment._id,
+          patientId: appointment.patientId,
+          status: 'pending',
+        },
+      }) : Promise.resolve(),
+    ]);
+
     return appointment;
   }
 
@@ -210,11 +354,69 @@ class AppointmentService {
       if (!['confirmed', 'completed', 'cancelled'].includes(status)) {
         throw new Error('Doctors can only confirm, complete, or cancel appointments');
       }
+
+      if (status === 'completed') {
+        const latestPayment = await this.getLatestPaymentForAppointment(appointment._id);
+        if (!latestPayment || latestPayment.status !== 'completed') {
+          throw new Error('Payment is not completed. Doctor cannot complete this appointment yet.');
+        }
+      }
     }
 
     appointment.status = status;
     appointment.updatedAt = new Date();
     await appointment.save();
+
+    const patient = await this.getUserById(appointment.patientId);
+    const { user: doctorUser } = await this.getDoctorContext(appointment.doctorId);
+    const appointmentLabel = this.formatAppointmentLabel(appointment);
+
+    if (role === 'doctor' && status === 'confirmed') {
+      await sendNotification({
+        userId: appointment.patientId,
+        title: 'Appointment accepted',
+        type: 'appointment_accepted',
+        message: `Your appointment ${appointmentLabel} has been accepted. You can now pay for it.`,
+        metadata: {
+          appointmentId: appointment._id,
+          doctorId: appointment.doctorId,
+          status,
+        },
+      });
+    }
+
+    if (status === 'cancelled') {
+      const recipientId = role === 'patient' ? doctorUser?._id : appointment.patientId;
+      const recipientName = role === 'patient' ? `Dr. ${doctorUser?.name || 'your doctor'}` : patient?.name || 'the patient';
+
+      if (recipientId) {
+        await sendNotification({
+          userId: recipientId,
+          title: 'Appointment cancelled',
+          type: 'appointment_cancelled',
+          message: `${patient?.name || 'The patient'} cancelled the appointment ${appointmentLabel}.`,
+          metadata: {
+            appointmentId: appointment._id,
+            cancelledBy: role,
+            recipientName,
+          },
+        });
+      }
+    }
+
+    if (role === 'doctor' && status === 'completed') {
+      await sendNotification({
+        userId: appointment.patientId,
+        title: 'Consultation completed',
+        type: 'consultation_completed',
+        message: `Your consultation ${appointmentLabel} has been completed.`,
+        metadata: {
+          appointmentId: appointment._id,
+          doctorId: appointment.doctorId,
+          status,
+        },
+      });
+    }
 
     return appointment;
   }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Calendar, Clock, DollarSign, Bell, MoreVertical, CheckCircle, XCircle } from 'lucide-react';
+import { Users, Calendar, Clock, DollarSign, MoreVertical, CheckCircle, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppointmentService } from '../../services/api';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function DoctorDashboard() {
   const currentUser = (() => {
@@ -76,11 +77,17 @@ export default function DoctorDashboard() {
         const type = app.type
           || app.appointmentType
           || (notes.includes('clinic visit') || notes.includes('in-person') ? 'Clinic Visit' : 'Video Consult');
+        const paymentStatus = (app.paymentStatus || 'pending').toLowerCase();
+        const canConsult = app.status === 'confirmed' && paymentStatus === 'completed';
+        const canAccept = app.status === 'pending';
 
         return {
           id: app._id,
           status: statusToLabel(app.status),
           rawStatus: app.status,
+          paymentStatus,
+          canConsult,
+          canAccept,
           patientName: patient.name || 'Patient',
           age: patient.age ? `${patient.age} yrs` : 'N/A',
           time: app.time || 'Time not set',
@@ -94,7 +101,7 @@ export default function DoctorDashboard() {
   );
 
   const todayAppointments = normalizedAppointments.filter(
-    (app) => app.isToday && app.rawStatus !== 'pending'
+    (app) => app.isToday && app.rawStatus !== 'pending' && app.rawStatus !== 'cancelled'
   );
 
   const pendingRequests = normalizedAppointments.filter((app) => app.rawStatus === 'pending');
@@ -125,9 +132,7 @@ export default function DoctorDashboard() {
             <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
             <span className="font-bold text-green-700 text-sm">Online</span>
           </div>
-          <button className="bg-white p-2 border border-gray-200 rounded-xl text-gray-600 hover:text-primary transition-colors">
-            <Bell className="w-5 h-5" />
-          </button>
+          <NotificationBell />
         </div>
       </div>
 
@@ -212,7 +217,7 @@ export default function DoctorDashboard() {
                     }`}>
                       {app.status}
                     </span>
-                    {app.status === 'In Progress' && (
+                    {app.canConsult && (
                        <Link to={`/doctor/consultation/${app.id}`} className="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors">
                         Join Call
                       </Link>
@@ -243,6 +248,15 @@ export default function DoctorDashboard() {
                      <div>
                        <h4 className="font-bold text-text">{req.patientName}</h4>
                        <p className="text-xs text-gray-500 mt-0.5">{req.type}</p>
+                       <span className={`inline-flex mt-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${
+                         req.paymentStatus === 'completed'
+                           ? 'bg-green-50 text-green-700 border-green-200'
+                           : req.paymentStatus === 'failed'
+                             ? 'bg-red-50 text-red-700 border-red-200'
+                             : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                       }`}>
+                         {req.paymentStatus === 'completed' ? 'Paid' : req.paymentStatus === 'failed' ? 'Payment Failed' : 'Payment Pending'}
+                       </span>
                      </div>
                      <div className="text-right">
                        <span className="block text-sm font-bold text-text">{req.dateLabel}</span>
@@ -251,11 +265,11 @@ export default function DoctorDashboard() {
                    </div>
                    <div className="flex gap-2">
                      <button
-                       disabled={updatingId === req.id}
+                       disabled={updatingId === req.id || !req.canAccept}
                        onClick={() => handleRequestAction(req.id, 'confirmed')}
-                       className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1 transition-colors disabled:opacity-60"
+                       className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                      >
-                       <CheckCircle className="w-4 h-4" /> Accept
+                       <CheckCircle className="w-4 h-4" /> {req.canAccept ? 'Accept' : 'Await Payment'}
                      </button>
                      <button
                        disabled={updatingId === req.id}

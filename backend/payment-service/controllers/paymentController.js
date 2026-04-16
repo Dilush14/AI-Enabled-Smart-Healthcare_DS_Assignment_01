@@ -2,29 +2,45 @@ const paymentService = require('../services/paymentService');
 
 const createPayment = async (req, res) => {
   try {
-    const { appointmentId, amount } = req.body;
-    const payment = await paymentService.createPayment(appointmentId, amount);
-    res.status(201).json(payment);
+    const result = await paymentService.createPayment({
+      ...req.body,
+      userId: req.user.id,
+      role: req.user.role,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Payment processed through Stripe test API',
+      data: result,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
 const verifyPayment = async (req, res) => {
   try {
-    const payment = await paymentService.verifyPayment(req.params.id);
-    res.json(payment);
+    const payment = await paymentService.verifyPayment(req.params.id, req.user.id, req.user.role);
+    res.json({
+      success: true,
+      message: 'Payment verification complete',
+      data: payment,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
 const getPayments = async (req, res) => {
   try {
-    const payments = await paymentService.getPayments(req.user.id);
-    res.json(payments);
+    const payments = await paymentService.getPayments(req.user.id, req.user.role);
+    res.json({
+      success: true,
+      count: payments.length,
+      data: payments,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 

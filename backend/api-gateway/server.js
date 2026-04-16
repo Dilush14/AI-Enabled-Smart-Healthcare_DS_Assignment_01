@@ -19,6 +19,7 @@ app.use('/api/doctors', createProxyMiddleware({ target: 'http://localhost:3002',
 app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:3003', changeOrigin: true }));
 app.use('/api/telemedicine', createProxyMiddleware({ target: 'http://localhost:3004', changeOrigin: true }));
 app.use('/api/payments', createProxyMiddleware({ target: 'http://localhost:3005', changeOrigin: true }));
+app.use('/api/notifications', createProxyMiddleware({ target: 'http://localhost:3006', changeOrigin: true }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

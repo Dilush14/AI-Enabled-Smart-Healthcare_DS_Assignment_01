@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, Clock, CreditCard, ChevronLeft, CheckCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, ChevronLeft, CheckCircle } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { AppointmentService, DoctorService } from '../../services/api';
@@ -122,12 +122,11 @@ export default function BookAppointment() {
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </button>
         <h1 className="text-2xl font-bold text-text">
-          {step === 1 ? 'Book Appointment' : 'Payment Details'}
+          Book Appointment
         </h1>
       </div>
 
-      {step === 1 && (
-        <div className="space-y-8">
+      <div className="space-y-8">
           <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
             <h2 className="text-lg font-bold text-text mb-4 flex items-center gap-2">
               <CalendarIcon className="w-5 h-5 text-primary" /> Select Date
@@ -210,78 +209,20 @@ export default function BookAppointment() {
             </div>
           </div>
 
-          <button 
-            disabled={!selectedTime}
-            onClick={() => setStep(2)}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-sm ${
-              selectedTime ? 'bg-primary hover:bg-secondary text-white shadow-primary/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            Continue to Payment
-          </button>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h2 className="font-bold text-text mb-4">Summary</h2>
-            <div className="space-y-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Doctor</span>
-                <span className="font-bold">{doctorName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Date & Time</span>
-                <span className="font-bold">{selectedDate?.label} - {selectedTime}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Type</span>
-                <span className="font-bold">{appointmentType}</span>
-              </div>
-              <div className="pt-3 mt-3 border-t border-gray-200 flex justify-between">
-                <span className="text-gray-500 font-bold">Total Fees</span>
-                <span className="font-extrabold text-lg text-primary">$150.00</span>
-              </div>
-            </div>
-          </div>
-
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
               {error}
             </div>
           )}
 
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h2 className="font-bold text-text mb-6 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-primary" /> Payment Method
-            </h2>
-            
-            <div className="space-y-4">
-              <label className="flex items-center gap-4 p-4 border-2 border-primary bg-primary/5 rounded-xl cursor-pointer">
-                <input type="radio" name="payment" className="w-4 h-4 text-primary focus:ring-primary" defaultChecked />
-                <div className="font-bold text-text">Credit / Debit Card</div>
-              </label>
-              
-              <div className="space-y-4 pl-8 pr-4">
-                <input type="text" placeholder="Card Number" className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50" />
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="text" placeholder="MM/YY" className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50" />
-                  <input type="text" placeholder="CVC" className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50" />
-                </div>
-              </div>
-            </div>
-          </div>
-
           <button 
             onClick={bookAppointment}
-            disabled={submitting}
+            disabled={submitting || !selectedTime}
             className="w-full bg-primary hover:bg-secondary disabled:opacity-60 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold text-lg transition-all shadow-xl shadow-primary/30 mt-6"
           >
-            {submitting ? 'Confirming...' : 'Pay $150.00 & Confirm'}
+            {submitting ? 'Creating Appointment...' : 'Confirm Appointment'}
           </button>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
