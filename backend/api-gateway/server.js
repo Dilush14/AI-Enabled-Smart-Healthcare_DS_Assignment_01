@@ -11,7 +11,6 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(morgan('combined'));
-app.use(express.json());
 
 // Proxy to services
 app.use('/api/auth', createProxyMiddleware({ target: 'http://localhost:3001', changeOrigin: true }));

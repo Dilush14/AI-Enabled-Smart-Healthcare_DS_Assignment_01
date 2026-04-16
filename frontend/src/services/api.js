@@ -27,8 +27,11 @@ api.interceptors.response.use(
   (error) => {
     // Handle global errors (e.g. 401 Unauthorized)
     if (error.response && error.response.status === 401) {
-      // localStorage.removeItem('token');
-      // window.location.href = '/login';
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -36,10 +39,11 @@ api.interceptors.response.use(
 
 // API Service modules
 export const UserService = {
-  login: (credentials) => api.post('/users/login', credentials),
-  register: (userData) => api.post('/users/register', userData),
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (userData) => api.post('/auth/register', userData),
   getProfile: () => api.get('/users/profile'),
-  updateProfile: (data) => api.put('/users/profile', data),
+  updateProfile: (data) => api.put('/users/update', data),
+  getAllUsers: () => api.get('/users'),
 };
 
 export const DoctorService = {
@@ -52,12 +56,14 @@ export const DoctorService = {
 
 export const AppointmentService = {
   getAppointments: () => api.get('/appointments'),
-  bookAppointment: (data) => api.post('/appointments', data),
-  cancelAppointment: (id) => api.delete(`/appointments/${id}`),
+  bookAppointment: (data) => api.post('/appointments/book', data),
+  cancelAppointment: (id) => api.put(`/appointments/${id}/cancel`),
 };
 
 export const PaymentService = {
-  processPayment: (paymentData) => api.post('/payments/process', paymentData),
+  processPayment: (paymentData) => api.post('/payments/create', paymentData),
+  getPaymentsHistory: () => api.get('/payments/history'),
+  verifyPayment: (id) => api.put(`/payments/${id}/verify`),
 };
 
 export const TelemedicineService = {
