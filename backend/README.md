@@ -10,7 +10,7 @@ This is a microservices-based backend for a healthcare platform using Node.js, E
 - **Appointment Service**: Handles booking, cancelling, and searching appointments.
 - **Telemedicine Service**: Creates video consultation sessions using Jitsi Meet.
 - **Payment Service**: Processes payments via PayHere sandbox.
-- **Notification Service**: Sends email notifications.
+- **Notification Service**: Stores in-app notifications and supports internal event emission.
 
 ## Tech Stack
 

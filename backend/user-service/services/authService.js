@@ -4,9 +4,13 @@ const User = require('../models/User');
 
 class AuthService {
   async register(userData) {
-    const { name, email, password, role } = userData;
+    const { name, email, password, role, specialization } = userData;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ name, email, password: hashedPassword, role });
+    const userPayload = { name, email, password: hashedPassword, role };
+    if (role === 'doctor' && specialization) {
+      userPayload.specialization = specialization;
+    }
+    const user = new User(userPayload);
     await user.save();
     return user;
   }

@@ -24,10 +24,38 @@ export default function AdminDashboard() {
           PaymentService.getPaymentsHistory(),
         ]);
 
-        setUsers(Array.isArray(usersRes) ? usersRes : []);
-        setDoctors(Array.isArray(doctorsRes) ? doctorsRes : []);
-        setAppointments(Array.isArray(appointmentsRes) ? appointmentsRes : []);
-        setPayments(Array.isArray(paymentsRes) ? paymentsRes : []);
+        const users = Array.isArray(usersRes) ? usersRes : [];
+        const doctorProfiles = Array.isArray(doctorsRes) ? doctorsRes : [];
+        const doctorUsers = users.filter((user) => user.role === 'doctor');
+
+        const mergedDoctors = doctorProfiles.length
+          ? doctorProfiles
+          : doctorUsers.map((user) => ({
+              _id: user._id,
+              userId: user,
+              specialization: user.specialization || 'General Physician',
+              licenseNumber: user.licenseNumber || 'N/A',
+              isVerified: user.isVerified || false,
+              createdAt: user.createdAt,
+            }));
+
+        setUsers(users);
+        setDoctors(mergedDoctors);
+
+        const appointments = Array.isArray(appointmentsRes)
+          ? appointmentsRes
+          : Array.isArray(appointmentsRes?.data)
+            ? appointmentsRes.data
+            : [];
+
+        const payments = Array.isArray(paymentsRes)
+          ? paymentsRes
+          : Array.isArray(paymentsRes?.data)
+            ? paymentsRes.data
+            : [];
+
+        setAppointments(appointments);
+        setPayments(payments);
       } catch (err) {
         setError(err?.response?.data?.message || 'Failed to load admin dashboard data');
       } finally {

@@ -58,6 +58,7 @@ export const AppointmentService = {
   getAppointments: () => api.get('/appointments'),
   bookAppointment: (data) => api.post('/appointments/book', data),
   cancelAppointment: (id) => api.put(`/appointments/${id}/cancel`),
+  updateAppointmentStatus: (id, status) => api.patch(`/appointments/${id}/status`, { status }),
 };
 
 export const PaymentService = {
@@ -67,12 +68,40 @@ export const PaymentService = {
 };
 
 export const TelemedicineService = {
-  generateToken: (appointmentId) => api.post(`/telemedicine/token`, { appointmentId }),
+  createSession: (data) => api.post('/telemedicine/create-session', data),
+  getSession: (id) => api.get(`/telemedicine/session/${id}`),
+  getSessionByAppointment: (appointmentId) => api.get(`/telemedicine/session/appointment/${appointmentId}`),
+  updateSessionStatus: (id, status) => api.put(`/telemedicine/session/${id}/status`, { status }),
+  endSession: (id, notes) => api.put(`/telemedicine/session/${id}/end`, { notes }),
+  uploadReport: (formData) => {
+    const apiWithFormData = axios.create({
+      baseURL: '/api',
+      timeout: 30000,
+    });
+    const token = localStorage.getItem('token');
+    if (token) {
+      apiWithFormData.defaults.headers.Authorization = `Bearer ${token}`;
+    }
+    return apiWithFormData.post('/telemedicine/report/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data).catch(err => Promise.reject(err));
+  },
+  getReports: (sessionId, patientId) => {
+    const params = {};
+    if (sessionId) params.sessionId = sessionId;
+    if (patientId) params.patientId = patientId;
+    return api.get('/telemedicine/reports', { params });
+  },
+  getReportById: (id) => api.get(`/telemedicine/report/${id}`),
+  addDoctorNotes: (id, notes, recommendations) => api.put(`/telemedicine/report/${id}/notes`, { notes, recommendations }),
+  getSessionReports: (sessionId) => api.get(`/telemedicine/session/${sessionId}/reports`),
+  getPatientReports: () => api.get('/telemedicine/patient/reports'),
 };
 
 export const NotificationService = {
   getNotifications: () => api.get('/notifications'),
   markAsRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllAsRead: () => api.put('/notifications/read-all'),
 };
 
 export default api;
