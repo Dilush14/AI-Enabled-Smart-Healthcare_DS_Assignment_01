@@ -198,7 +198,7 @@ export default function PatientReports() {
   const reportDownloadUrl = (fileUrl) => {
     if (!fileUrl) return '#';
     if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
-    return `http://localhost:3004${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
+    return fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
   };
 
   return (

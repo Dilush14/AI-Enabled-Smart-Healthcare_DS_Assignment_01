@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006/api/notifications/internal';
 const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || 'medikaline-internal-token';
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3000';
 
 async function sendNotification(payload) {
   try {
@@ -301,7 +302,7 @@ class AppointmentService {
   // Verify doctor exists
   async verifyDoctor(doctorId) {
     try {
-      const response = await axios.get(`http://localhost:3000/api/doctors/${doctorId}`);
+      const response = await axios.get(`${API_GATEWAY_URL}/api/doctors/${doctorId}`);
       return response.data && response.data._id;
     } catch (error) {
       if (error.response?.status === 404) {
@@ -431,7 +432,7 @@ class AppointmentService {
       params.page = page;
       params.limit = limit;
 
-      const response = await axios.get('http://localhost:3000/api/doctors', { params });
+      const response = await axios.get(`${API_GATEWAY_URL}/api/doctors`, { params });
       
       return {
         doctors: response.data || [],
