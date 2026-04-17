@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Calendar, Clock, DollarSign, MoreVertical, CheckCircle, XCircle, Video } from 'lucide-react';
+import { Users, Calendar, Clock, DollarSign, MoreVertical, CheckCircle, XCircle, Video, UploadCloud, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AppointmentService } from '../../services/api';
+import { AppointmentService, DoctorService, UserService } from '../../services/api';
 import NotificationBell from '../../components/NotificationBell';
 
 export default function DoctorDashboard() {
@@ -19,6 +19,55 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updatingId, setUpdatingId] = useState('');
+  const [selectedProofFile, setSelectedProofFile] = useState(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [verificationState, setVerificationState] = useState({
+    idProofUrl: '',
+    isVerified: false,
+  });
+
+  const readIdProofUrl = (record) => {
+    if (!record || typeof record !== 'object') return '';
+
+    const possibleValues = [
+      record.idProofUrl,
+      record.idProofDocumentUrl,
+      record.governmentIdProofUrl,
+      record.licenseDocumentUrl,
+      record.licenseProofUrl,
+      record.licenseImageUrl,
+      record.userId?.idProofUrl,
+      record.userId?.idProofDocumentUrl,
+      record.userId?.governmentIdProofUrl,
+      record.userId?.licenseDocumentUrl,
+      record.userId?.licenseProofUrl,
+      record.userId?.licenseImageUrl,
+    ];
+
+    const found = possibleValues.find((value) => typeof value === 'string' && value.trim().length > 0);
+    return found || '';
+  };
+
+  const loadVerificationState = async () => {
+    try {
+      const [profile, doctorRecord] = await Promise.all([
+        UserService.getProfile(),
+        currentUser?._id ? DoctorService.getDoctorById(currentUser._id) : Promise.resolve(null),
+      ]);
+
+      const idProofUrl = readIdProofUrl(doctorRecord) || readIdProofUrl(profile);
+      const isVerified = Boolean(doctorRecord?.isVerified ?? profile?.isVerified);
+
+      setVerificationState({ idProofUrl, isVerified });
+
+      if (profile && currentUser) {
+        const updatedUser = { ...currentUser, ...profile };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch {
+      // Keep dashboard functional even if profile fetch fails.
+    }
+  };
 
   const loadAppointments = async () => {
     try {
@@ -40,7 +89,43 @@ export default function DoctorDashboard() {
 
   useEffect(() => {
     loadAppointments();
+    loadVerificationState();
   }, []);
+
+  const handleIdProofUpload = async () => {
+    if (!currentUser?._id) {
+      setError('Please log in again to upload your ID proof.');
+      return;
+    }
+
+    if (!selectedProofFile) {
+      setError('Please select an image file before uploading.');
+      return;
+    }
+
+    try {
+      setUploadingProof(true);
+      setError('');
+
+      const formData = new FormData();
+      formData.append('idProofImage', selectedProofFile);
+
+      const updatedDoctor = await DoctorService.uploadIdProof(currentUser._id, formData);
+      const idProofUrl = readIdProofUrl(updatedDoctor);
+
+      setVerificationState((prev) => ({
+        ...prev,
+        idProofUrl,
+        isVerified: Boolean(updatedDoctor?.isVerified),
+      }));
+      setSelectedProofFile(null);
+      await loadVerificationState();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to upload ID proof image');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
 
   const formatDate = (value) => {
     if (!value) return '-';
@@ -142,6 +227,58 @@ export default function DoctorDashboard() {
           <NotificationBell />
         </div>
       </div>
+
+      {!verificationState.idProofUrl && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-700 mt-0.5" />
+            <div className="flex-1 space-y-3">
+              <h2 className="text-base font-bold text-amber-900">Upload ID Proof To Activate Doctor Account</h2>
+              <p className="text-sm text-amber-800">
+                Your profile is hidden from patients until you upload an ID proof image and an admin approves your account.
+              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setSelectedProofFile(event.target.files?.[0] || null)}
+                  className="block w-full text-sm text-amber-900 file:mr-4 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-amber-900 hover:file:bg-amber-200"
+                />
+                <button
+                  onClick={handleIdProofUpload}
+                  disabled={uploadingProof || !selectedProofFile}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  {uploadingProof ? 'Uploading...' : 'Upload ID Proof'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {verificationState.idProofUrl && !verificationState.isVerified && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-700 mt-0.5" />
+            <div className="space-y-2">
+              <h2 className="text-base font-bold text-blue-900">ID Proof Uploaded</h2>
+              <p className="text-sm text-blue-800">
+                Your ID proof has been submitted. An admin must accept your account before patients can view your profile.
+              </p>
+              <a
+                href={verificationState.idProofUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+              >
+                View uploaded ID proof
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">

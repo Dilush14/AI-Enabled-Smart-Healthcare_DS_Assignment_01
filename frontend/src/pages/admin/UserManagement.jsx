@@ -28,7 +28,7 @@ export default function UserManagement() {
             _id: user._id,
             userId: user,
             specialization: user.specialization || 'General Physician',
-            licenseNumber: user.licenseNumber || 'N/A',
+            licenseNumber: user.licenseNumber || '',
             isVerified: user.isVerified || false,
             createdAt: user.createdAt,
           }));
@@ -46,11 +46,76 @@ export default function UserManagement() {
     loadData();
   }, []);
 
+  const hasIdProof = (doctorRecord) => {
+    if (!doctorRecord || typeof doctorRecord !== 'object') {
+      return false;
+    }
+
+    const candidates = [
+      doctorRecord.idProofUrl,
+      doctorRecord.idProof,
+      doctorRecord.idProofDocument,
+      doctorRecord.idProofDocumentUrl,
+      doctorRecord.governmentIdProofUrl,
+      doctorRecord.licenseDocumentUrl,
+      doctorRecord.licenseProofUrl,
+      doctorRecord.licenseImageUrl,
+      doctorRecord.userId?.idProofUrl,
+      doctorRecord.userId?.idProof,
+      doctorRecord.userId?.idProofDocument,
+      doctorRecord.userId?.idProofDocumentUrl,
+      doctorRecord.userId?.governmentIdProofUrl,
+      doctorRecord.userId?.licenseDocumentUrl,
+      doctorRecord.userId?.licenseProofUrl,
+      doctorRecord.userId?.licenseImageUrl,
+    ];
+
+    return candidates.some((candidate) => {
+      if (typeof candidate === 'string') {
+        return candidate.trim().length > 0;
+      }
+
+      if (candidate && typeof candidate === 'object') {
+        const nested = candidate.url || candidate.path || candidate.secure_url || candidate.location;
+        return typeof nested === 'string' && nested.trim().length > 0;
+      }
+
+      return false;
+    });
+  };
+
+  const getIdProofUrl = (doctorRecord) => {
+    if (!doctorRecord || typeof doctorRecord !== 'object') {
+      return '';
+    }
+
+    const candidates = [
+      doctorRecord.idProofUrl,
+      doctorRecord.idProofDocumentUrl,
+      doctorRecord.governmentIdProofUrl,
+      doctorRecord.licenseDocumentUrl,
+      doctorRecord.licenseProofUrl,
+      doctorRecord.licenseImageUrl,
+      doctorRecord.userId?.idProofUrl,
+      doctorRecord.userId?.idProofDocumentUrl,
+      doctorRecord.userId?.governmentIdProofUrl,
+      doctorRecord.userId?.licenseDocumentUrl,
+      doctorRecord.userId?.licenseProofUrl,
+      doctorRecord.userId?.licenseImageUrl,
+    ];
+
+    const found = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+    return found || '';
+  };
+
   const mappedDoctors = useMemo(() => doctors.map((doc) => ({
     id: doc._id,
     name: doc.userId?.name || 'Doctor',
     roleOrSpecialty: doc.specialization,
     licenseOrId: doc.licenseNumber,
+    idProofUrl: getIdProofUrl(doc),
+    isDoctor: true,
+    hasIdProof: hasIdProof(doc),
     status: doc.isVerified ? 'Verified' : 'Pending',
     joined: doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : '-',
   })), [doctors]);
@@ -60,6 +125,8 @@ export default function UserManagement() {
     name: user.name,
     roleOrSpecialty: 'Patient',
     licenseOrId: user.email,
+    idProofUrl: '',
+    isDoctor: false,
     status: 'Active',
     joined: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-',
   })), [patients]);
@@ -75,7 +142,12 @@ export default function UserManagement() {
     );
   }, [activeTab, mappedDoctors, mappedPatients, query]);
 
-  const handleVerifyDoctor = async (doctorId) => {
+  const handleVerifyDoctor = async (doctorId, canVerify) => {
+    if (!canVerify) {
+      setError('Doctor cannot be verified until an ID proof document is uploaded.');
+      return;
+    }
+
     try {
       await DoctorService.verifyDoctor(doctorId);
       await loadData();
@@ -160,9 +232,30 @@ export default function UserManagement() {
                   </td>
                   <td className="p-6 text-gray-600 font-medium">{row.roleOrSpecialty}</td>
                   <td className="p-6 text-gray-500 font-medium">
-                    <div className="flex items-center gap-2">
-                       <FileText className="w-4 h-4 text-gray-400" /> {row.licenseOrId}
-                    </div>
+                    {row.isDoctor ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                          <span>{row.licenseOrId || '-'}</span>
+                        </div>
+                        {row.idProofUrl ? (
+                          <a
+                            href={row.idProofUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block text-xs font-bold text-primary hover:text-secondary hover:underline"
+                          >
+                            View Uploaded ID
+                          </a>
+                        ) : (
+                          <span className="inline-block text-xs font-semibold text-amber-700">Not uploaded</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-gray-400" /> {row.licenseOrId}
+                      </div>
+                    )}
                   </td>
                   <td className="p-6">
                     <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${
@@ -177,7 +270,12 @@ export default function UserManagement() {
                   <td className="p-6">
                     {activeTab === 'doctors' && row.status === 'Pending' ? (
                        <div className="flex justify-center gap-2">
-                         <button onClick={() => handleVerifyDoctor(row.id)} className="p-2 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors" title="Approve">
+                         <button
+                           onClick={() => handleVerifyDoctor(row.id, row.hasIdProof)}
+                           disabled={!row.hasIdProof}
+                           className={`p-2 rounded-lg transition-colors ${row.hasIdProof ? 'bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                           title={row.hasIdProof ? 'Approve' : 'Upload ID proof required before approval'}
+                         >
                            <CheckCircle className="w-5 h-5" />
                          </button>
                          <button className="p-2 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" title="Reject">

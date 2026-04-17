@@ -41,6 +41,8 @@ api.interceptors.response.use(
 export const UserService = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, password) => api.post('/auth/reset-password', { token, password }),
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/update', data),
   getAllUsers: () => api.get('/users'),
@@ -52,6 +54,22 @@ export const DoctorService = {
   getAvailability: (id) => api.get(`/doctors/${id}/availability`),
   updateDoctor: (id, data) => api.put(`/doctors/${id}`, data),
   verifyDoctor: (id) => api.put(`/doctors/${id}/verify`),
+  rateDoctor: (id, data) => api.put(`/doctors/${id}/rating`, data),
+  uploadIdProof: (id, formData) => {
+    const apiWithFormData = axios.create({
+      baseURL: '/api',
+      timeout: 30000,
+    });
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      apiWithFormData.defaults.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return apiWithFormData
+      .put(`/doctors/${id}/id-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .then((res) => res.data);
+  },
 };
 
 export const AppointmentService = {
@@ -76,6 +94,8 @@ export const TelemedicineService = {
   getSessionByAppointment: (appointmentId) => api.get(`/telemedicine/session/appointment/${appointmentId}`),
   updateSessionStatus: (id, status) => api.put(`/telemedicine/session/${id}/status`, { status }),
   endSession: (id, notes) => api.put(`/telemedicine/session/${id}/end`, { notes }),
+  updateConsultationNotes: (id, consultationNotes) => api.put(`/telemedicine/session/${id}/consultation-notes`, { consultationNotes }),
+  updatePrescription: (id, prescription) => api.put(`/telemedicine/session/${id}/prescription`, prescription),
   uploadReport: (formData) => {
     const apiWithFormData = axios.create({
       baseURL: '/api',

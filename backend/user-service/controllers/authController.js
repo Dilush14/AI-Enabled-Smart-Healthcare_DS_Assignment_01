@@ -33,4 +33,36 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+const forgotPassword = async (req, res) => {
+  try {
+    const schema = Joi.object({
+      email: Joi.string().email().required(),
+    });
+    const { error } = schema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    return res.json({
+      message: 'If an account exists with this email, a password reset email has been sent.',
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const schema = Joi.object({
+      token: Joi.string().required(),
+      password: Joi.string().min(6).required(),
+    });
+    const { error } = schema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    await authService.resetPassword(req.body.token, req.body.password);
+    return res.json({ message: 'Password reset successful. You can now log in.' });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
+module.exports = { register, login, forgotPassword, resetPassword };

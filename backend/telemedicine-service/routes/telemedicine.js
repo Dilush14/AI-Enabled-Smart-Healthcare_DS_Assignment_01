@@ -5,6 +5,8 @@ const {
   getSessionByAppointment,
   updateSessionStatus,
   endSession,
+  updateConsultationNotes,
+  updatePrescription,
   uploadReport,
   getReports,
   getReportById,
@@ -23,6 +25,8 @@ router.get('/session/:id', auth, getSession);
 router.get('/session/appointment/:appointmentId', auth, getSessionByAppointment);
 router.put('/session/:id/status', auth, updateSessionStatus);
 router.put('/session/:id/end', auth, endSession);
+router.put('/session/:id/consultation-notes', auth, updateConsultationNotes);
+router.put('/session/:id/prescription', auth, updatePrescription);
 
 // Report routes
 router.post('/report/upload', auth, upload.single('file'), uploadReport);

@@ -33,6 +33,35 @@ class TelemedicineService {
     return usersCollection.findOne({ _id: new mongoose.Types.ObjectId(userId) });
   }
 
+  async getAppointmentById(appointmentId) {
+    if (!appointmentId || !mongoose.Types.ObjectId.isValid(appointmentId)) {
+      return null;
+    }
+
+    const appointmentsCollection = mongoose.connection?.db?.collection('appointments');
+    if (!appointmentsCollection) {
+      return null;
+    }
+
+    return appointmentsCollection.findOne({ _id: new mongoose.Types.ObjectId(appointmentId) });
+  }
+
+  async getLatestPaymentForAppointment(appointmentId) {
+    if (!appointmentId || !mongoose.Types.ObjectId.isValid(appointmentId)) {
+      return null;
+    }
+
+    const paymentsCollection = mongoose.connection?.db?.collection('payments');
+    if (!paymentsCollection) {
+      return null;
+    }
+
+    return paymentsCollection.findOne(
+      { appointmentId: new mongoose.Types.ObjectId(appointmentId) },
+      { sort: { createdAt: -1 } }
+    );
+  }
+
   async resolveDoctorUserId(doctorId) {
     if (!doctorId || !mongoose.Types.ObjectId.isValid(doctorId)) {
       return null;
@@ -275,6 +304,21 @@ class TelemedicineService {
 
   async createSession(appointmentId, patientId, doctorId) {
     if (appointmentId) {
+      const appointment = await this.getAppointmentById(appointmentId);
+      if (!appointment) {
+        throw new Error('Appointment not found');
+      }
+
+      const appointmentStatus = (appointment.status || '').toLowerCase();
+      if (appointmentStatus !== 'confirmed') {
+        throw new Error('Video consultation is only available after the appointment is confirmed');
+      }
+
+      const latestPayment = await this.getLatestPaymentForAppointment(appointmentId);
+      if ((latestPayment?.status || '').toLowerCase() !== 'completed') {
+        throw new Error('Payment is required before starting a video consultation');
+      }
+
       const existingSession = await Session.findOne({ appointmentId });
       if (existingSession) {
         return existingSession;
@@ -345,6 +389,35 @@ class TelemedicineService {
     }
 
     return session;
+  }
+
+  async updateConsultationNotes(sessionId, consultationNotes = '') {
+    return await Session.findByIdAndUpdate(
+      sessionId,
+      {
+        consultationNotes,
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
+  }
+
+  async updatePrescription(sessionId, prescription = {}) {
+    const payload = {
+      diagnosis: prescription.diagnosis || '',
+      medication: prescription.medication || '',
+      followUpAdvice: prescription.followUpAdvice || '',
+      updatedAt: new Date()
+    };
+
+    return await Session.findByIdAndUpdate(
+      sessionId,
+      {
+        prescription: payload,
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
   }
 
   async uploadReport(sessionId, patientId, doctorId, appointmentId, file, reportType, actorRole = 'patient') {

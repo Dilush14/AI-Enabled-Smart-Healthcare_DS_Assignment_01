@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Home, Calendar, Users, FileText, Settings, Activity, PieChart } from 'lucide-react';
+import { Home, Calendar, Users, User, FileText, Settings, Activity, PieChart } from 'lucide-react';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -10,6 +10,8 @@ import LandingPage from './pages/LandingPage';
 import AboutPage from './pages/AboutPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Patient Pages
 import PatientDashboard from './pages/patient/PatientDashboard';
@@ -28,6 +30,7 @@ import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import ManageSchedule from './pages/doctor/ManageSchedule';
 import DoctorConsultation from './pages/doctor/DoctorConsultation';
 import DoctorCalendar from './pages/doctor/DoctorCalendar';
+import DoctorProfileSettings from './pages/doctor/DoctorProfileSettings';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -44,6 +47,7 @@ const patientLinks = [
 
 const doctorLinks = [
   { name: 'Dashboard', path: '/doctor/dashboard', icon: Home },
+  { name: 'Profile', path: '/doctor/profile', icon: User },
   { name: 'Calendar', path: '/doctor/calendar', icon: Calendar },
   { name: 'My Schedule', path: '/doctor/schedule', icon: Calendar },
   { name: 'Settings', path: '/doctor/settings', icon: Settings },
@@ -91,6 +95,8 @@ function App() {
           <Route path="about" element={<AboutPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="doctors" element={<BrowseDoctors />} />
         </Route>
 
@@ -127,11 +133,12 @@ function App() {
         >
           <Route index element={<Navigate to="/doctor/dashboard" replace />} />
           <Route path="dashboard" element={<DoctorDashboard />} />
+          <Route path="profile" element={<DoctorProfileSettings />} />
           <Route path="calendar" element={<DoctorCalendar />} />
           <Route path="schedule" element={<ManageSchedule />} />
           <Route path="consultation/:id" element={<DoctorConsultation />} />
           <Route path="notifications" element={<NotificationsPage />} />
-          <Route path="settings" element={<PatientSettings />} />
+          <Route path="settings" element={<DoctorProfileSettings />} />
         </Route>
 
         {/* Admin Routes */}
