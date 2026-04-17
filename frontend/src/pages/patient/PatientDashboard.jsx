@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, User, FileText, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { AppointmentService, DoctorService, PaymentService, TelemedicineService } from '../../services/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { AppointmentService, DoctorService, TelemedicineService } from '../../services/api';
 import AppointmentCard from '../../components/AppointmentCard';
 import NotificationBell from '../../components/NotificationBell';
 
 export default function PatientDashboard() {
+  const navigate = useNavigate();
   const currentUser = (() => {
     try {
       const raw = localStorage.getItem('user');
@@ -31,32 +32,6 @@ export default function PatientDashboard() {
     medications: { bar: 'bg-rose-500', label: 'Medication' },
   };
 
-  const processPayment = async (appointmentId) => {
-    const paymentResponse = await PaymentService.processPayment({
-      appointmentId,
-      amount: 150,
-      currency: 'usd',
-      paymentMethod: 'card',
-      paymentMethodId: 'pm_card_visa',
-    });
-
-    const paymentData = paymentResponse?.data || paymentResponse;
-    const paymentRecord = paymentData?.payment || paymentData;
-
-    if (!paymentRecord?._id) {
-      throw new Error('Payment record was not created');
-    }
-
-    if (paymentRecord.status !== 'completed') {
-      const verifyResponse = await PaymentService.verifyPayment(paymentRecord._id);
-      const verified = verifyResponse?.data || verifyResponse;
-      const finalStatus = (verified?.status || '').toLowerCase();
-      if (finalStatus !== 'completed') {
-        throw new Error('Payment could not be completed');
-      }
-    }
-  };
-
   const handleCancelAppointment = async (appointmentId) => {
     try {
       setActionLoadingId(appointmentId);
@@ -71,16 +46,7 @@ export default function PatientDashboard() {
   };
 
   const handlePayAppointment = async (appointmentId) => {
-    try {
-      setActionLoadingId(appointmentId);
-      setError('');
-      await processPayment(appointmentId);
-      await loadAppointments();
-    } catch (err) {
-      setError(err?.response?.data?.message || err?.message || 'Payment failed');
-    } finally {
-      setActionLoadingId('');
-    }
+    navigate(`/patient/payments/${appointmentId}`);
   };
 
   const loadAppointments = async () => {

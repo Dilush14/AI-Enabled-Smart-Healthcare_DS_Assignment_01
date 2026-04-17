@@ -10,8 +10,20 @@ const createPayment = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Payment processed through Stripe test API',
+      message: 'Payment intent created',
       data: result,
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const getPaymentByAppointment = async (req, res) => {
+  try {
+    const payment = await paymentService.getPaymentByAppointment(req.params.appointmentId, req.user.id, req.user.role);
+    res.json({
+      success: true,
+      data: payment,
     });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -44,4 +56,4 @@ const getPayments = async (req, res) => {
   }
 };
 
-module.exports = { createPayment, verifyPayment, getPayments };
+module.exports = { createPayment, verifyPayment, getPayments, getPaymentByAppointment };

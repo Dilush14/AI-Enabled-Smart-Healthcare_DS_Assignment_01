@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, ChevronDown, Loader2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { NotificationService } from '../services/api';
 
 const formatTime = (value) => {
@@ -15,16 +16,26 @@ const formatTime = (value) => {
 };
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const rootRef = useRef(null);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((item) => !(item.isRead ?? item.readAt)).length,
-    [notifications]
-  );
+  const loadUnreadCount = async () => {
+    try {
+      const response = await NotificationService.getUnreadCount();
+      const count = Number(response?.unreadCount ?? response?.data?.unreadCount ?? 0);
+      if (Number.isFinite(count)) {
+        setUnreadCount(count);
+      }
+    } catch {
+      // Keep current badge value when count fetch fails.
+    }
+  };
 
   const loadNotifications = async () => {
     try {
@@ -37,6 +48,11 @@ export default function NotificationBell() {
           ? response.data
           : [];
       setNotifications(list);
+      if (typeof response?.unreadCount === 'number') {
+        setUnreadCount(response.unreadCount);
+      } else {
+        setUnreadCount(list.filter((item) => !(item.isRead ?? item.readAt)).length);
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load notifications');
     } finally {
@@ -49,6 +65,12 @@ export default function NotificationBell() {
       loadNotifications();
     }
   }, [open]);
+
+  useEffect(() => {
+    loadUnreadCount();
+    const intervalId = setInterval(loadUnreadCount, 30000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -65,6 +87,7 @@ export default function NotificationBell() {
     try {
       await NotificationService.markAsRead(id);
       await loadNotifications();
+      await loadUnreadCount();
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to update notification');
     }
@@ -74,9 +97,18 @@ export default function NotificationBell() {
     try {
       await NotificationService.markAllAsRead();
       await loadNotifications();
+      await loadUnreadCount();
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to update notifications');
     }
+  };
+
+  const goToNotificationsPage = () => {
+    const section = (location.pathname.split('/')[1] || '').toLowerCase();
+    const allowedSections = ['patient', 'doctor', 'admin'];
+    const roleSection = allowedSections.includes(section) ? section : 'patient';
+    setOpen(false);
+    navigate(`/${roleSection}/notifications`);
   };
 
   return (
@@ -167,7 +199,13 @@ export default function NotificationBell() {
 
           <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
             <span className="text-xs text-gray-500">Click a notification to mark it read.</span>
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <button
+              type="button"
+              onClick={goToNotificationsPage}
+              className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
+            >
+              View all <ChevronDown className="w-4 h-4 text-primary" />
+            </button>
           </div>
         </div>
       )}
