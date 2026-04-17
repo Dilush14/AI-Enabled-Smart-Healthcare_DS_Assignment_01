@@ -1,5 +1,17 @@
 # AI-Enabled-Smart-Healthcare_DS_Assignment_01
 
+## Implemented Deliverables
+
+This project includes the following completed deliverables:
+
+- Microservice-based backend (`api-gateway`, `user-service`, `doctor-service`, `appointment-service`, `telemedicine-service`, `payment-service`, `notification-service`)
+- Frontend client (`frontend/`) integrated with API Gateway
+- OTP-based password reset flow (email OTP verification + new password)
+- Appointment workflow improvements (doctor-side visibility and status handling)
+- Email notifications (Nodemailer) for appointment `accepted` and `cancelled` events
+- Doctor verification workflow with ID-proof upload support
+- Deployment assets for Docker Compose and Kubernetes under `deployment/`
+
 ## Deployment Setup (Docker + Kubernetes)
 
 This repository now includes a complete deployment scaffold under `deployment/`.
@@ -171,8 +183,8 @@ Frontend -> API Gateway -> Microservices -> MongoDB
 
 ### 6) Environment variables
 
-- Docker sample env: `deployment/config/.env.docker`
-- Kubernetes sample env: `deployment/config/.env.k8s.example`
+- Docker env: `deployment/config/.env.docker`
+- Kubernetes env: `deployment/config/.env.k8s`
 
 These include:
 
@@ -181,5 +193,5 @@ These include:
 - Service ports and internal URLs
 - OpenAI model/API key
 - Jitsi placeholders
-- Stripe and PayHere placeholders
+- Stripe placeholders
 - Nodemailer placeholders
