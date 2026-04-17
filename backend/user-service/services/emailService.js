@@ -96,7 +96,7 @@ class EmailService {
     return socket;
   }
 
-  async sendPasswordResetEmail(to, resetLink, name = '') {
+  async sendPasswordResetOtpEmail(to, otp, name = '') {
     this.assertConfigured();
 
     const host = process.env.NODEMAILER_HOST;
@@ -105,12 +105,13 @@ class EmailService {
     const password = normalizePassword(process.env.NODEMAILER_PASS);
     const from = process.env.NODEMAILER_FROM || username;
     const displayName = name ? ` ${name}` : '';
-    const subject = 'Reset your Smart Healthcare password';
+    const subject = 'Your Smart Healthcare password reset OTP';
     const textBody = [
       `Hello${displayName},`,
       '',
       'We received a request to reset your password.',
-      `Reset your password here: ${resetLink}`,
+      `Use this OTP to reset your password: ${otp}`,
+      'This OTP will expire in 10 minutes.',
       '',
       'If you did not request this, you can safely ignore this email.',
     ].join('\n');
@@ -130,7 +131,7 @@ class EmailService {
     let readResponse = createResponseReader(socket);
 
     try {
-      console.log(`Sending password reset email to ${to} via ${host}:${port}`);
+      console.log(`Sending password reset OTP email to ${to} via ${host}:${port}`);
       await expectResponse(readResponse, [220]);
       await sendCommand(socket, readResponse, `EHLO ${host}`, [250]);
 
@@ -154,7 +155,7 @@ class EmailService {
 
       socket.write('QUIT\r\n');
       await expectResponse(readResponse, [221]);
-      console.log(`Password reset email sent to ${to}`);
+      console.log(`Password reset OTP email sent to ${to}`);
     } finally {
       socket.end();
     }

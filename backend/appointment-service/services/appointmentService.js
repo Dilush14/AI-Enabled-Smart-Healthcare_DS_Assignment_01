@@ -19,6 +19,67 @@ async function sendNotification(payload) {
 }
 
 class AppointmentService {
+  async getDoctorAppointmentIds(userId) {
+    const ids = new Set();
+
+    if (!userId) {
+      return [];
+    }
+
+    ids.add(String(userId));
+
+    const doctorObjectId = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : null;
+
+    if (!doctorObjectId) {
+      return Array.from(ids);
+    }
+
+    const doctorsCollection = mongoose.connection?.db?.collection('doctors');
+    if (!doctorsCollection) {
+      return Array.from(ids);
+    }
+
+    const doctorDocs = await doctorsCollection
+      .find({ userId: doctorObjectId }, { projection: { _id: 1 } })
+      .toArray();
+
+    doctorDocs.forEach((doc) => {
+      if (doc?._id) {
+        ids.add(String(doc._id));
+      }
+    });
+
+    return Array.from(ids);
+  }
+
+  async canDoctorManageAppointment(appointmentDoctorId, requesterUserId) {
+    if (!appointmentDoctorId || !requesterUserId) {
+      return false;
+    }
+
+    if (String(appointmentDoctorId) === String(requesterUserId)) {
+      return true;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(appointmentDoctorId) || !mongoose.Types.ObjectId.isValid(requesterUserId)) {
+      return false;
+    }
+
+    const doctorsCollection = mongoose.connection?.db?.collection('doctors');
+    if (!doctorsCollection) {
+      return false;
+    }
+
+    const doctorRecord = await doctorsCollection.findOne({
+      _id: new mongoose.Types.ObjectId(appointmentDoctorId),
+      userId: new mongoose.Types.ObjectId(requesterUserId),
+    });
+
+    return Boolean(doctorRecord);
+  }
+
   async getUserById(userId) {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return null;
@@ -176,7 +237,8 @@ class AppointmentService {
     if (role === 'patient') {
       query.patientId = userId;
     } else if (role === 'doctor') {
-      query.doctorId = userId;
+      const doctorIds = await this.getDoctorAppointmentIds(userId);
+      query.doctorId = { $in: doctorIds };
     }
 
     // Apply additional filters
@@ -356,7 +418,8 @@ class AppointmentService {
     }
 
     if (role === 'doctor') {
-      if (doctorId !== userId_str) {
+      const canManage = await this.canDoctorManageAppointment(doctorId, userId_str);
+      if (!canManage) {
         throw new Error('Unauthorized: You can only manage your appointments');
       }
       if (!['confirmed', 'completed', 'cancelled'].includes(status)) {
