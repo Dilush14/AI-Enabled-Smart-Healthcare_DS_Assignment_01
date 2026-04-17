@@ -10,6 +10,13 @@ const sessionSchema = new mongoose.Schema({
   endTime: { type: Date },
   recordingUrl: { type: String },
   notes: { type: String },
+  consultationNotes: { type: String, default: '' },
+  prescription: {
+    diagnosis: { type: String, default: '' },
+    medication: { type: String, default: '' },
+    followUpAdvice: { type: String, default: '' },
+    updatedAt: { type: Date }
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
