@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Calendar, Clock, DollarSign, MoreVertical, CheckCircle, XCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Users, Calendar, Clock, DollarSign, MoreVertical, CheckCircle, XCircle, Video } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { AppointmentService } from '../../services/api';
 import NotificationBell from '../../components/NotificationBell';
 
 export default function DoctorDashboard() {
+  const navigate = useNavigate();
   const currentUser = (() => {
     try {
       const raw = localStorage.getItem('user');
@@ -80,6 +81,7 @@ export default function DoctorDashboard() {
         const paymentStatus = (app.paymentStatus || 'pending').toLowerCase();
         const canConsult = app.status === 'confirmed' && paymentStatus === 'completed';
         const canAccept = app.status === 'pending';
+        const isVideoAppointment = String(type).toLowerCase().includes('video');
 
         return {
           id: app._id,
@@ -88,6 +90,7 @@ export default function DoctorDashboard() {
           paymentStatus,
           canConsult,
           canAccept,
+          isVideoAppointment,
           patientName: patient.name || 'Patient',
           age: patient.age ? `${patient.age} yrs` : 'N/A',
           time: app.time || 'Time not set',
@@ -102,6 +105,10 @@ export default function DoctorDashboard() {
 
   const todayAppointments = normalizedAppointments.filter(
     (app) => app.isToday && app.rawStatus !== 'pending' && app.rawStatus !== 'cancelled'
+  );
+
+  const upcomingAppointments = normalizedAppointments.filter(
+    (app) => app.rawStatus === 'confirmed' || (app.rawStatus === 'pending' && app.paymentStatus === 'completed')
   );
 
   const pendingRequests = normalizedAppointments.filter((app) => app.rawStatus === 'pending');
@@ -186,8 +193,55 @@ export default function DoctorDashboard() {
 
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-50 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-text">Upcoming Appointments</h2>
+              <span className="text-sm font-medium text-gray-500">{upcomingAppointments.length} total</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {loading && <div className="p-6 text-gray-500">Loading upcoming appointments...</div>}
+              {!loading && upcomingAppointments.length === 0 && <div className="p-6 text-gray-500">No upcoming appointments right now.</div>}
+              {!loading && upcomingAppointments.map((app) => (
+                <div key={app.id} className="p-6 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-4 border-r border-gray-100 pr-6 w-32">
+                    <span className="font-bold text-text whitespace-nowrap">{app.time}</span>
+                  </div>
+                  <div className="flex items-center gap-4 flex-1 px-6">
+                    <img
+                      src={app.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(app.patientName)}&background=f3f4f6&color=1E293B`}
+                      alt={app.patientName}
+                      className="w-12 h-12 rounded-full border border-gray-200"
+                    />
+                    <div>
+                      <h4 className="font-bold text-text">{app.patientName}</h4>
+                      <p className="text-sm text-gray-500">{app.age} • {app.type} • {app.dateLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                      app.status === 'Confirmed' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                      app.status === 'Upcoming' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
+                      'bg-gray-50 text-gray-600 border-gray-200'
+                    }`}>
+                      {app.status}
+                    </span>
+                    {app.isVideoAppointment && (
+                      <button
+                        onClick={() => navigate(`/doctor/consultation/${app.id}`)}
+                        className="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                      >
+                        <Video className="w-4 h-4" />
+                        Open Video
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-50 flex justify-between items-center">
               <h2 className="text-lg font-bold text-text">Today's Schedule</h2>
-              <button className="text-primary text-sm font-bold hover:underline">View All</button>
+              <Link to="/doctor/calendar" className="text-primary text-sm font-bold hover:underline">View All</Link>
             </div>
             <div className="divide-y divide-gray-50">
               {loading && <div className="p-6 text-gray-500">Loading schedule...</div>}

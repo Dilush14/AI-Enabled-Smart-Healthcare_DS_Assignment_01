@@ -133,7 +133,8 @@ const searchDoctors = async (req, res, next) => {
 // Get available appointment slots for a doctor
 const getAvailableSlots = async (req, res, next) => {
   try {
-    const { doctorId, date } = req.query;
+    const doctorId = req.params.doctorId || req.query.doctorId;
+    const { date } = req.query;
 
     if (!doctorId || !date) {
       return res.status(400).json({

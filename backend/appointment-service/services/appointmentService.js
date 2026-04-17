@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006/api/notifications/internal';
 const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || 'medikaline-internal-token';
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3000';
 
 async function sendNotification(payload) {
   try {
@@ -301,7 +302,7 @@ class AppointmentService {
   // Verify doctor exists
   async verifyDoctor(doctorId) {
     try {
-      const response = await axios.get(`http://localhost:3000/api/doctors/${doctorId}`);
+      const response = await axios.get(`${API_GATEWAY_URL}/api/doctors/${doctorId}`);
       return response.data && response.data._id;
     } catch (error) {
       if (error.response?.status === 404) {
@@ -431,7 +432,7 @@ class AppointmentService {
       params.page = page;
       params.limit = limit;
 
-      const response = await axios.get('http://localhost:3000/api/doctors', { params });
+      const response = await axios.get(`${API_GATEWAY_URL}/api/doctors`, { params });
       
       return {
         doctors: response.data || [],
@@ -456,17 +457,51 @@ class AppointmentService {
     return appointment;
   }
 
-  // Get doctor's available slots (mock implementation)
+  async getDoctorAvailability(doctorId) {
+    const response = await axios.get(`${API_GATEWAY_URL}/api/doctors/${doctorId}`);
+    const availability = response?.data?.availability;
+    return Array.isArray(availability) ? availability : [];
+  }
+
+  getDayKey(date) {
+    return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  }
+
+  getDayBounds(date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
+  // Get doctor's available slots based on saved weekly availability
   async getAvailableSlots(doctorId, date) {
     try {
-      // Here you can add logic to fetch doctor's availability
-      // For now, return standard slots
-      const slots = this.generateTimeSlots('09:00', '17:00', 30);
+      const selectedDate = new Date(date);
+      if (Number.isNaN(selectedDate.getTime())) {
+        throw new Error('Invalid date provided');
+      }
+
+      const dayKey = this.getDayKey(selectedDate);
+      const doctorAvailability = await this.getDoctorAvailability(doctorId);
+      const dayAvailability = doctorAvailability.filter((slot) => slot.day === dayKey);
+
+      if (dayAvailability.length === 0) {
+        return [];
+      }
+
+      const slots = [
+        ...new Set(
+          dayAvailability.flatMap((slot) => this.generateTimeSlots(slot.startTime, slot.endTime, 30))
+        )
+      ].sort();
+      const { start, end } = this.getDayBounds(selectedDate);
       
       // Filter out already booked slots
       const bookedAppointments = await Appointment.find({
-        doctorId: doctorId,
-        date: new Date(date),
+        doctorId,
+        date: { $gte: start, $lte: end },
         status: { $in: ['pending', 'confirmed'] }
       });
 

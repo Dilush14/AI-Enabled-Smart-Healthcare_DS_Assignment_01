@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, User, FileText, Search } from 'lucide-react';
-import { AppointmentService, DoctorService, PaymentService } from '../../services/api';
+import { Link } from 'react-router-dom';
+import { AppointmentService, DoctorService, PaymentService, TelemedicineService } from '../../services/api';
 import AppointmentCard from '../../components/AppointmentCard';
 import NotificationBell from '../../components/NotificationBell';
 
@@ -19,6 +20,16 @@ export default function PatientDashboard() {
   const [actionLoadingId, setActionLoadingId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reportsCount, setReportsCount] = useState(0);
+  const [healthReminders, setHealthReminders] = useState([]);
+
+  const reminderTheme = {
+    diet: { bar: 'bg-orange-500', label: 'Diet' },
+    exercise: { bar: 'bg-accent', label: 'Exercise' },
+    sleep: { bar: 'bg-indigo-500', label: 'Sleep' },
+    lifestyle: { bar: 'bg-blue-500', label: 'Lifestyle' },
+    medications: { bar: 'bg-rose-500', label: 'Medication' },
+  };
 
   const processPayment = async (appointmentId) => {
     const paymentResponse = await PaymentService.processPayment({
@@ -104,6 +115,42 @@ export default function PatientDashboard() {
       }, {});
 
       setDoctorsById(dictionary);
+
+      try {
+        const reportsResponse = await TelemedicineService.getPatientReports();
+        const reportsList = Array.isArray(reportsResponse)
+          ? reportsResponse
+          : Array.isArray(reportsResponse?.data)
+            ? reportsResponse.data
+            : [];
+        setReportsCount(reportsList.length);
+
+        const sortedReports = [...reportsList].sort(
+          (a, b) => new Date(b?.uploadedAt || 0).getTime() - new Date(a?.uploadedAt || 0).getTime()
+        );
+        const latestReport = sortedReports[0];
+        const dailyHabits = latestReport?.aiAnalysis?.dailyHabits;
+
+        if (dailyHabits && typeof dailyHabits === 'object') {
+          const reminders = Object.entries(dailyHabits)
+            .flatMap(([key, values]) => {
+              if (!Array.isArray(values)) return [];
+              return values.slice(0, 2).map((text, idx) => ({
+                id: `${key}-${idx}`,
+                category: reminderTheme[key]?.label || 'Health',
+                barClass: reminderTheme[key]?.bar || 'bg-blue-500',
+                text,
+              }));
+            })
+            .slice(0, 5);
+          setHealthReminders(reminders);
+        } else {
+          setHealthReminders([]);
+        }
+      } catch {
+        setReportsCount(0);
+        setHealthReminders([]);
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load appointments');
     } finally {
@@ -218,10 +265,10 @@ export default function PatientDashboard() {
           </div>
           <div>
             <p className="text-gray-500 text-sm font-medium">Reports</p>
-            <h3 className="text-xl font-bold text-text">5 Documents</h3>
+            <h3 className="text-xl font-bold text-text">{reportsCount} Documents</h3>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 bg-gradient-to-r from-primary to-secondary text-white border-transparent">
+        <div className="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4 bg-linear-to-r from-primary to-secondary text-white border-transparent">
           <div>
             <p className="text-primary-100 text-sm font-medium">Need help?</p>
             <h3 className="font-bold mb-1">Book new visit</h3>
@@ -240,7 +287,7 @@ export default function PatientDashboard() {
 
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg font-bold text-text">Upcoming Appointments</h2>
-            <button className="text-sm text-primary font-medium hover:underline">View All</button>
+            <Link to="/patient/calendar" className="text-sm text-primary font-medium hover:underline">View All</Link>
           </div>
           {loading ? (
             <div className="bg-white border border-gray-100 rounded-2xl p-5 text-gray-500">Loading appointments...</div>
@@ -276,20 +323,21 @@ export default function PatientDashboard() {
               <h3 className="font-bold text-text">Health Reminders</h3>
             </div>
             <div className="p-5 space-y-4">
-              <div className="flex gap-4">
-                <div className="w-1.5 bg-accent rounded-full shrink-0"></div>
-                <div>
-                  <h4 className="font-bold text-sm text-text">Take Vitamin C</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Everyday after breakfast</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="w-1.5 bg-blue-500 rounded-full shrink-0"></div>
-                <div>
-                  <h4 className="font-bold text-sm text-text">Drink Water</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Goal: 2.5 Liters daily</p>
-                </div>
-              </div>
+              {healthReminders.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Upload a report to receive AI-generated daily health reminders.
+                </p>
+              ) : (
+                healthReminders.map((item) => (
+                  <div key={item.id} className="flex gap-4">
+                    <div className={`w-1.5 ${item.barClass} rounded-full shrink-0`}></div>
+                    <div>
+                      <h4 className="font-bold text-sm text-text">{item.category}</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">{item.text}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
