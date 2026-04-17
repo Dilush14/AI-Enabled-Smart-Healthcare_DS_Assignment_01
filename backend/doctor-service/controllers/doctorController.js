@@ -36,7 +36,7 @@ const verifyDoctor = async (req, res) => {
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
     res.json(doctor);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 

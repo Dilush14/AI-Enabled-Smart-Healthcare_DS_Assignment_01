@@ -2,6 +2,46 @@ const Doctor = require('../models/Doctor');
 const mongoose = require('mongoose');
 
 class DoctorService {
+  hasIdProof(record) {
+    if (!record || typeof record !== 'object') {
+      return false;
+    }
+
+    const proofCandidates = [
+      record.idProofUrl,
+      record.idProof,
+      record.idProofDocument,
+      record.idProofDocumentUrl,
+      record.governmentIdProofUrl,
+      record.licenseDocumentUrl,
+      record.licenseProofUrl,
+      record.licenseImageUrl,
+    ];
+
+    return proofCandidates.some((candidate) => {
+      if (typeof candidate === 'string') {
+        return candidate.trim().length > 0;
+      }
+
+      if (candidate && typeof candidate === 'object') {
+        const nested = candidate.url || candidate.path || candidate.secure_url || candidate.location;
+        return typeof nested === 'string' && nested.trim().length > 0;
+      }
+
+      return false;
+    });
+  }
+
+  assertProofBeforeVerification(doctorRecord, userRecord) {
+    if (this.hasIdProof(doctorRecord) || this.hasIdProof(userRecord)) {
+      return;
+    }
+
+    const error = new Error('Doctor cannot be verified until an ID proof document is uploaded.');
+    error.statusCode = 400;
+    throw error;
+  }
+
   toObjectId(id) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return null;
@@ -30,6 +70,7 @@ class DoctorService {
       userId: user,
       specialization: user.specialization || 'General Physician',
       licenseNumber: user.licenseNumber || 'N/A',
+      idProofUrl: user.idProofUrl || user.idProofDocumentUrl || user.governmentIdProofUrl || user.licenseDocumentUrl || null,
       isVerified: user.isVerified || false,
       experience: user.experience || 0,
       rating: user.rating || 4.9,
@@ -126,8 +167,23 @@ class DoctorService {
   }
 
   async verifyDoctor(id) {
-    const updatedDoctor = await Doctor.findByIdAndUpdate(id, { isVerified: true }, { new: true });
-    if (updatedDoctor) {
+    const usersCollection = mongoose.connection.collection('users');
+    const doctorById = await Doctor.findById(id);
+    if (doctorById) {
+      const targetUserId = doctorById.userId;
+      const user = targetUserId
+        ? await usersCollection.findOne({ _id: targetUserId, role: 'doctor' })
+        : null;
+
+      this.assertProofBeforeVerification(doctorById, user);
+
+      const updatedDoctor = await Doctor.findByIdAndUpdate(id, { isVerified: true }, { new: true }).populate('userId');
+      if (targetUserId) {
+        await usersCollection.updateOne(
+          { _id: targetUserId, role: 'doctor' },
+          { $set: { isVerified: true } }
+        );
+      }
       return updatedDoctor;
     }
 
@@ -136,14 +192,30 @@ class DoctorService {
       return null;
     }
 
-    const usersCollection = mongoose.connection.collection('users');
+    const doctorByUserId = await Doctor.findOne({ userId });
+    const user = await usersCollection.findOne({ _id: userId, role: 'doctor' });
+    if (!user) {
+      return null;
+    }
+
+    this.assertProofBeforeVerification(doctorByUserId, user);
+
+    if (doctorByUserId) {
+      await Doctor.updateOne({ _id: doctorByUserId._id }, { $set: { isVerified: true } });
+    }
+
     await usersCollection.updateOne(
       { _id: userId, role: 'doctor' },
       { $set: { isVerified: true } }
     );
 
-    const user = await usersCollection.findOne({ _id: userId, role: 'doctor' });
-    return user ? this.mapUserToDoctor(user) : null;
+    const updatedDoctor = await Doctor.findOne({ userId }).populate('userId');
+    if (updatedDoctor) {
+      return updatedDoctor;
+    }
+
+    const updatedUser = await usersCollection.findOne({ _id: userId, role: 'doctor' });
+    return updatedUser ? this.mapUserToDoctor(updatedUser) : null;
   }
 
   async getAvailability(id) {

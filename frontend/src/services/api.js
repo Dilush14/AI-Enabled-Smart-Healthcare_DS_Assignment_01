@@ -41,6 +41,8 @@ api.interceptors.response.use(
 export const UserService = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, password) => api.post('/auth/reset-password', { token, password }),
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/update', data),
   getAllUsers: () => api.get('/users'),
