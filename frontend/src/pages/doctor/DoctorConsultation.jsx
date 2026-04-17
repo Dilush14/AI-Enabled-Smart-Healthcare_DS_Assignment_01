@@ -9,6 +9,14 @@ export default function DoctorConsultation() {
   const [activeTab, setActiveTab] = useState('notes');
   const [appointment, setAppointment] = useState(null);
   const [session, setSession] = useState(null);
+  const [consultationNotes, setConsultationNotes] = useState('');
+  const [diagnosis, setDiagnosis] = useState('');
+  const [medication, setMedication] = useState('');
+  const [followUpAdvice, setFollowUpAdvice] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [savingPrescription, setSavingPrescription] = useState(false);
+  const [panelMessage, setPanelMessage] = useState('');
+  const [panelError, setPanelError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -41,6 +49,11 @@ export default function DoctorConsultation() {
 
         setAppointment(appointmentData);
 
+        const paymentStatus = (appointmentData.paymentStatus || 'pending').toLowerCase();
+        if (paymentStatus !== 'completed') {
+          throw new Error('The patient has not completed payment yet. Video consultation will be available after payment is confirmed.');
+        }
+
         let sessionData = null;
         try {
           const existingSessionResponse = await TelemedicineService.getSessionByAppointment(id);
@@ -59,6 +72,10 @@ export default function DoctorConsultation() {
         }
 
         setSession(sessionData);
+        setConsultationNotes(sessionData?.consultationNotes || '');
+        setDiagnosis(sessionData?.prescription?.diagnosis || '');
+        setMedication(sessionData?.prescription?.medication || '');
+        setFollowUpAdvice(sessionData?.prescription?.followUpAdvice || '');
       } catch (err) {
         setError(err?.response?.data?.message || err?.message || 'Failed to load consultation');
       } finally {
@@ -68,6 +85,52 @@ export default function DoctorConsultation() {
 
     loadConsultation();
   }, [id]);
+
+  const handleSaveNotes = async () => {
+    if (!session?._id) return;
+
+    try {
+      setSavingNotes(true);
+      setPanelMessage('');
+      setPanelError('');
+
+      const response = await TelemedicineService.updateConsultationNotes(session._id, consultationNotes);
+      const updatedSession = response?.data || response;
+      setSession(updatedSession);
+      setConsultationNotes(updatedSession?.consultationNotes || consultationNotes);
+      setPanelMessage('Consultation notes saved successfully.');
+    } catch (err) {
+      setPanelError(err?.response?.data?.message || 'Failed to save consultation notes');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
+  const handleSavePrescription = async () => {
+    if (!session?._id) return;
+
+    try {
+      setSavingPrescription(true);
+      setPanelMessage('');
+      setPanelError('');
+
+      const response = await TelemedicineService.updatePrescription(session._id, {
+        diagnosis,
+        medication,
+        followUpAdvice,
+      });
+      const updatedSession = response?.data || response;
+      setSession(updatedSession);
+      setDiagnosis(updatedSession?.prescription?.diagnosis || diagnosis);
+      setMedication(updatedSession?.prescription?.medication || medication);
+      setFollowUpAdvice(updatedSession?.prescription?.followUpAdvice || followUpAdvice);
+      setPanelMessage('Prescription saved successfully.');
+    } catch (err) {
+      setPanelError(err?.response?.data?.message || 'Failed to save prescription');
+    } finally {
+      setSavingPrescription(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -134,14 +197,26 @@ export default function DoctorConsultation() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 bg-gray-50/30">
+            {(panelMessage || panelError) && (
+              <div className={`mb-4 px-4 py-3 rounded-xl border text-sm ${panelError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
+                {panelError || panelMessage}
+              </div>
+            )}
+
             {activeTab === 'notes' ? (
               <div className="space-y-4 h-full flex flex-col">
                 <textarea 
                   className="w-full flex-1 p-5 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none bg-white shadow-inner font-medium text-text leading-relaxed"
                   placeholder="Type doctors notes, symptoms, and private observations here. These are not visible to the patient."
+                  value={consultationNotes}
+                  onChange={(event) => setConsultationNotes(event.target.value)}
                 ></textarea>
-                <button className="w-full bg-primary/10 hover:bg-primary/20 text-primary py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors border border-primary/20">
-                  <Save className="w-5 h-5" /> Save Internal Notes
+                <button
+                  onClick={handleSaveNotes}
+                  disabled={savingNotes || !session?._id}
+                  className="w-full bg-primary/10 hover:bg-primary/20 text-primary py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors border border-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Save className="w-5 h-5" /> {savingNotes ? 'Saving...' : 'Save Internal Notes'}
                 </button>
               </div>
             ) : (
@@ -149,13 +224,21 @@ export default function DoctorConsultation() {
                 <div className="flex-1 space-y-5">
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Diagnosis</label>
-                    <input type="text" className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-medium shadow-sm" placeholder="E.g. Mild Hypertension" />
+                    <input
+                      type="text"
+                      className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-medium shadow-sm"
+                      placeholder="E.g. Mild Hypertension"
+                      value={diagnosis}
+                      onChange={(event) => setDiagnosis(event.target.value)}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Medication</label>
                     <textarea 
                       className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-35 font-medium shadow-sm leading-relaxed"
                       placeholder="1. Lisinopril 10mg, take 1 tablet daily.&#10;2. Vitamin D3 1000IU daily."
+                      value={medication}
+                      onChange={(event) => setMedication(event.target.value)}
                     ></textarea>
                   </div>
                   <div>
@@ -163,11 +246,17 @@ export default function DoctorConsultation() {
                      <textarea 
                       className="w-full p-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-25 font-medium shadow-sm leading-relaxed"
                       placeholder="Reduce sodium intake. Return to clinic in 3 weeks."
+                      value={followUpAdvice}
+                      onChange={(event) => setFollowUpAdvice(event.target.value)}
                     ></textarea>
                   </div>
                 </div>
-                <button className="w-full bg-primary hover:bg-secondary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm shadow-primary/30 transition-all hover:-translate-y-0.5 mt-auto">
-                  <Send className="w-5 h-5" /> Issue Digital Prescription
+                <button
+                  onClick={handleSavePrescription}
+                  disabled={savingPrescription || !session?._id}
+                  className="w-full bg-primary hover:bg-secondary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm shadow-primary/30 transition-all hover:-translate-y-0.5 mt-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-5 h-5" /> {savingPrescription ? 'Saving...' : 'Issue Digital Prescription'}
                 </button>
               </div>
             )}

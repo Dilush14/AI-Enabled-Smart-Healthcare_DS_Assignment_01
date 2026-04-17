@@ -22,6 +22,7 @@ export default function PatientReports() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [consultationSummary, setConsultationSummary] = useState(null);
 
   const getUserIdFromToken = () => {
     try {
@@ -89,6 +90,34 @@ export default function PatientReports() {
       setReports(sortedReports);
       setSelectedReportId((prev) => prev || sortedReports[0]?._id || '');
       setAppointments(appointmentsList);
+
+      const sortedAppointments = [...appointmentsList].sort(
+        (a, b) => new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime()
+      );
+
+      let latestSessionWithDoctorData = null;
+      for (const appointment of sortedAppointments) {
+        try {
+          const sessionResponse = await TelemedicineService.getSessionByAppointment(appointment?._id);
+          const session = sessionResponse?.data || sessionResponse;
+          if (
+            session
+            && (
+              (session.consultationNotes && session.consultationNotes.trim())
+              || (session.prescription?.diagnosis && session.prescription.diagnosis.trim())
+              || (session.prescription?.medication && session.prescription.medication.trim())
+              || (session.prescription?.followUpAdvice && session.prescription.followUpAdvice.trim())
+            )
+          ) {
+            latestSessionWithDoctorData = session;
+            break;
+          }
+        } catch {
+          // Ignore missing session and continue to older appointments.
+        }
+      }
+
+      setConsultationSummary(latestSessionWithDoctorData);
 
       if (reportsResult.status === 'rejected' && appointmentsResult.status === 'rejected') {
         setError('Unable to load reports right now. Please try again.');
@@ -271,6 +300,46 @@ export default function PatientReports() {
         </div>
 
         <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <h2 className="text-lg font-bold text-text mb-4">Doctor Consultation Summary</h2>
+
+            {loading ? (
+              <p className="text-sm text-gray-500">Loading consultation summary...</p>
+            ) : !consultationSummary ? (
+              <p className="text-sm text-gray-500">No doctor notes or prescription are available yet for your recent consultations.</p>
+            ) : (
+              <div className="space-y-4">
+                {consultationSummary.consultationNotes ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Consultation Notes</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{consultationSummary.consultationNotes}</p>
+                  </div>
+                ) : null}
+
+                {consultationSummary?.prescription?.diagnosis ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Diagnosis</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{consultationSummary.prescription.diagnosis}</p>
+                  </div>
+                ) : null}
+
+                {consultationSummary?.prescription?.medication ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Medication</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{consultationSummary.prescription.medication}</p>
+                  </div>
+                ) : null}
+
+                {consultationSummary?.prescription?.followUpAdvice ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Follow-up Advice</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{consultationSummary.prescription.followUpAdvice}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+
           <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
             <h2 className="text-lg font-bold text-text mb-4">Upload New Document</h2>
 
