@@ -2,12 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
 const connectDB = require('./config/database');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const errorHandler = require('./middlewares/errorHandler');
-
-require('dotenv').config();
 
 const app = express();
 

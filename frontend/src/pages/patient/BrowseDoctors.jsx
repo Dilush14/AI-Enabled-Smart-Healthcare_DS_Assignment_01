@@ -11,6 +11,13 @@ export default function BrowseDoctors() {
 
   const specialties = ['All', 'Cardiologist', 'Dermatologist', 'Pediatrician', 'Neurologist', 'Orthopedic', 'Dentist', 'General Physician'];
 
+  const normalizeDoctor = (doctor) => ({
+    ...doctor,
+    id: doctor._id || doctor.id,
+    name: doctor.userId?.name || doctor.name,
+    specialty: doctor.specialization || doctor.specialty,
+  });
+
   useEffect(() => {
     const loadDoctors = async () => {
       try {
@@ -19,13 +26,9 @@ export default function BrowseDoctors() {
         const params = activeSpecialty === 'All' ? {} : { specialization: activeSpecialty };
         const response = await DoctorService.getDoctors(params);
         const normalizedDoctors = Array.isArray(response)
-          ? response.map((doctor) => ({
-              ...doctor,
-              id: doctor._id || doctor.id,
-              name: doctor.userId?.name || doctor.name,
-              specialty: doctor.specialization || doctor.specialty,
-            }))
+          ? response.map(normalizeDoctor)
           : [];
+
         setDoctors(normalizedDoctors);
       } catch (err) {
         setError(err?.response?.data?.message || 'Failed to load doctors');

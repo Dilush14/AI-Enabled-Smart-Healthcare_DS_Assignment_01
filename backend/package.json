@@ -1,0 +1,12 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "dotenv -e .env -- concurrently -n gateway,user,doctor,appointment,telemedicine,payment,notification -c magenta,cyan,green,yellow,blue,red,white \"npm run dev --prefix api-gateway\" \"npm run dev --prefix user-service\" \"npm run dev --prefix doctor-service\" \"npm run dev --prefix appointment-service\" \"npm run dev --prefix telemedicine-service\" \"npm run dev --prefix payment-service\" \"npm run dev --prefix notification-service\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "dotenv-cli": "^7.4.2"
+  }
+}

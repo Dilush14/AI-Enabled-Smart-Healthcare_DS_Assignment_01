@@ -1,4 +1,4 @@
-import { Star, MapPin, Clock, Award, Shield, ChevronLeft, Calendar } from 'lucide-react';
+import { Star, MapPin, Clock, Award, Shield, ChevronLeft, Calendar, User } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { DoctorService } from '../../services/api';
@@ -75,7 +75,7 @@ export default function DoctorProfile() {
                   </h1>
                   <p className="text-lg text-primary font-medium mt-1">{doctor.specialization}</p>
                 </div>
-                <Link to={`/patient/book/${doctor.id}`} className="bg-primary hover:bg-secondary text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/30 w-full md:w-auto text-center flex items-center justify-center gap-2">
+                <Link to={`/patient/book/${doctor._id || doctor.id}`} className="bg-primary hover:bg-secondary text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/30 w-full md:w-auto text-center flex items-center justify-center gap-2">
                   <Calendar className="w-5 h-5" />
                   Book Appointment
                 </Link>
@@ -156,5 +156,3 @@ export default function DoctorProfile() {
     </div>
   );
 }
-// Fix imports
-import { User } from 'lucide-react';
