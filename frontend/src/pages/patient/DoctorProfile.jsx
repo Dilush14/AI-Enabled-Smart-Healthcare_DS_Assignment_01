@@ -1,21 +1,94 @@
-import { Star, MapPin, Clock, Award, Shield, ChevronLeft, Calendar } from 'lucide-react';
+import { Star, MapPin, Clock, Award, Shield, ChevronLeft, Calendar, User } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { DoctorService } from '../../services/api';
 
 export default function DoctorProfile() {
   const { id } = useParams();
+  const [doctor, setDoctor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [ratingLoading, setRatingLoading] = useState(false);
+  const [ratingMessage, setRatingMessage] = useState('');
 
-  // Mock data based on ID or default
-  const doctor = {
-    id: id || 1,
-    name: 'Dr. Sarah Jenkins',
-    specialty: 'Cardiologist',
-    rating: 4.9,
-    reviews: 124,
-    experience: 12,
-    patients: '5k+',
-    about: 'Dr. Sarah Jenkins is a board-certified Cardiologist with over 12 years of experience in treating various heart conditions. She specializes in preventive cardiology and echocardiography. Known for her compassionate approach, she has helped thousands of patients maintain healthy hearts.',
-    location: '123 Medical Center, New York, USA',
-    image: 'https://ui-avatars.com/api/?name=Sarah+Jenkins&background=0EA5E9&color=fff&size=256'
+  useEffect(() => {
+    const loadDoctor = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = await DoctorService.getDoctorById(id);
+        setDoctor(response);
+        const existingRating = Number(
+          response?.ratings?.find((entry) => {
+            const currentUser = (() => {
+              try {
+                const raw = localStorage.getItem('user');
+                return raw ? JSON.parse(raw) : null;
+              } catch {
+                return null;
+              }
+            })();
+            const patientId = entry?.patientId?._id || entry?.patientId;
+            return String(patientId || '') === String(currentUser?._id || '');
+          })?.rating || 0
+        );
+        setSelectedRating(existingRating);
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Failed to load doctor profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      loadDoctor();
+    }
+  }, [id]);
+
+  if (loading) {
+    return <div className="mx-auto max-w-4xl py-12 text-gray-500">Loading doctor profile...</div>;
+  }
+
+  if (error) {
+    return <div className="mx-auto max-w-4xl py-12 text-red-600">{error}</div>;
+  }
+
+  if (!doctor) {
+    return <div className="mx-auto max-w-4xl py-12 text-gray-500">Doctor not found.</div>;
+  }
+
+  if (!doctor.isVerified) {
+    return <div className="mx-auto max-w-4xl py-12 text-gray-500">Doctor profile is not available yet.</div>;
+  }
+
+  const displayName = doctor.userId?.name || doctor.name || 'Doctor';
+  const profileImage = doctor.userId?.profilePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0EA5E9&color=fff&size=256`;
+  const location = doctor.clinicAddress || doctor.userId?.address || '';
+  const clinicName = doctor.clinicName || '';
+  const rating = Number(doctor.ratingAverage || doctor.rating || 0);
+  const reviews = Number(doctor.ratingCount || doctor.reviews || 0);
+  const patients = Number(doctor.totalPatients || 0);
+  const about = doctor.about || '';
+  const availability = Array.isArray(doctor.availability) ? doctor.availability : [];
+
+  const handleSubmitRating = async () => {
+    if (!selectedRating) {
+      setRatingMessage('Please select a rating before submitting.');
+      return;
+    }
+
+    try {
+      setRatingLoading(true);
+      setRatingMessage('');
+      const updatedDoctor = await DoctorService.rateDoctor(id, { rating: selectedRating });
+      setDoctor(updatedDoctor);
+      setRatingMessage('Rating submitted successfully.');
+    } catch (err) {
+      setRatingMessage(err?.response?.data?.message || 'Failed to submit rating.');
+    } finally {
+      setRatingLoading(false);
+    }
   };
 
   return (
@@ -30,8 +103,8 @@ export default function DoctorProfile() {
           <div className="flex flex-col md:flex-row gap-8 items-start md:items-end -mt-16">
             <div className="relative">
               <img 
-                src={doctor.image} 
-                alt={doctor.name} 
+                src={profileImage} 
+                alt={displayName} 
                 className="w-32 h-32 rounded-3xl border-4 border-white object-cover bg-white shadow-lg"
               />
               <span className="absolute bottom-2 right-2 bg-green-500 border-2 border-white w-5 h-5 rounded-full"></span>
@@ -40,11 +113,12 @@ export default function DoctorProfile() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                   <h1 className="text-3xl font-extrabold text-text flex items-center gap-2">
-                    {doctor.name} <Shield className="w-6 h-6 text-accent fill-accent/20" />
+                    {displayName} <Shield className="w-6 h-6 text-accent fill-accent/20" />
                   </h1>
-                  <p className="text-lg text-primary font-medium mt-1">{doctor.specialty}</p>
+                  <p className="text-lg text-primary font-medium mt-1">{doctor.specialization}</p>
+                  {clinicName && <p className="text-sm text-gray-500 mt-1">{clinicName}</p>}
                 </div>
-                <Link to={`/patient/book/${doctor.id}`} className="bg-primary hover:bg-secondary text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/30 w-full md:w-auto text-center flex items-center justify-center gap-2">
+                <Link to={`/patient/book/${doctor._id || doctor.id}`} className="bg-primary hover:bg-secondary text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/30 w-full md:w-auto text-center flex items-center justify-center gap-2">
                   <Calendar className="w-5 h-5" />
                   Book Appointment
                 </Link>
@@ -55,27 +129,27 @@ export default function DoctorProfile() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 p-6 bg-gray-50 rounded-2xl border border-gray-100 text-center">
             <div>
               <div className="flex items-center justify-center text-text font-bold text-xl mb-1 gap-1">
-                <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" /> {doctor.rating}
+                <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" /> {rating > 0 ? rating.toFixed(1) : '-'}
               </div>
-              <p className="text-sm font-medium text-gray-500">{doctor.reviews} Reviews</p>
+              <p className="text-sm font-medium text-gray-500">{reviews} Reviews</p>
             </div>
             <div>
               <div className="flex items-center justify-center text-text font-bold text-xl mb-1 gap-1">
-                <Clock className="w-5 h-5 text-gray-400" /> {doctor.experience}
+                <Clock className="w-5 h-5 text-gray-400" /> {doctor.experience || 0}
               </div>
               <p className="text-sm font-medium text-gray-500">Years Exp.</p>
             </div>
             <div>
               <div className="flex items-center justify-center text-text font-bold text-xl mb-1 gap-1">
-                <User className="w-5 h-5 text-blue-400" /> {doctor.patients}
+                <User className="w-5 h-5 text-blue-400" /> {patients}
               </div>
               <p className="text-sm font-medium text-gray-500">Patients</p>
             </div>
             <div>
               <div className="flex items-center justify-center text-text font-bold text-xl mb-1 gap-1">
-                <Award className="w-5 h-5 text-purple-400" /> 15+
+                <Award className="w-5 h-5 text-purple-400" /> {doctor.licenseNumber || '-'}
               </div>
-              <p className="text-sm font-medium text-gray-500">Certificates</p>
+              <p className="text-sm font-medium text-gray-500">License</p>
             </div>
           </div>
         </div>
@@ -85,22 +159,21 @@ export default function DoctorProfile() {
         <div className="md:col-span-2 space-y-6">
           <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
             <h2 className="text-xl font-bold text-text mb-4">About Doctor</h2>
-            <p className="text-gray-600 leading-relaxed text-lg">{doctor.about}</p>
+            <p className="text-gray-600 leading-relaxed text-lg">{about || 'Doctor has not added profile details yet.'}</p>
             
             <h3 className="text-lg font-bold text-text mt-8 mb-4">Working Time</h3>
             <div className="space-y-3">
-              <div className="flex justify-between items-center pb-3 border-b border-gray-50">
-                <span className="text-gray-500 font-medium">Monday - Friday</span>
-                <span className="text-text font-bold">09:00 AM - 05:00 PM</span>
-              </div>
-              <div className="flex justify-between items-center pb-3 border-b border-gray-50">
-                <span className="text-gray-500 font-medium">Saturday</span>
-                <span className="text-text font-bold">10:00 AM - 02:00 PM</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500 font-medium">Sunday</span>
-                <span className="text-red-500 font-bold bg-red-50 px-3 py-1 rounded-lg text-sm">Closed</span>
-              </div>
+              {availability.length > 0 ? availability.map((slot, index) => (
+                <div key={`${slot.day}-${index}`} className="flex justify-between items-center pb-3 border-b border-gray-50 last:border-b-0 last:pb-0">
+                  <span className="text-gray-500 font-medium capitalize">{slot.day}</span>
+                  <span className="text-text font-bold">{slot.startTime} - {slot.endTime}</span>
+                </div>
+              )) : (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Availability not set</span>
+                  <span className="text-red-500 font-bold bg-red-50 px-3 py-1 rounded-lg text-sm">Not set</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -113,18 +186,38 @@ export default function DoctorProfile() {
                 <MapPin className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h4 className="font-bold text-text mb-1">Main Medical Center</h4>
-                <p className="text-sm text-gray-500 leading-relaxed">{doctor.location}</p>
-                <button className="text-primary text-sm font-bold mt-2 hover:underline inline-flex items-center gap-1">
-                  Get Directions
-                </button>
+                <h4 className="font-bold text-text mb-1">{clinicName || 'Clinic information not added'}</h4>
+                <p className="text-sm text-gray-500 leading-relaxed">{location || 'Address not provided yet.'}</p>
               </div>
             </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <h2 className="text-lg font-bold text-text mb-3">Rate This Doctor</h2>
+            <p className="text-sm text-gray-500 mb-3">Share your rating for this specific doctor.</p>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setSelectedRating(value)}
+                  className="p-1"
+                  title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                >
+                  <Star className={`w-6 h-6 ${value <= selectedRating ? 'text-yellow-500 fill-yellow-400' : 'text-gray-300'}`} />
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleSubmitRating}
+              disabled={ratingLoading}
+              className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white hover:bg-secondary disabled:opacity-60"
+            >
+              {ratingLoading ? 'Submitting...' : 'Submit Rating'}
+            </button>
+            {ratingMessage && <p className="mt-3 text-sm font-medium text-gray-600">{ratingMessage}</p>}
           </div>
         </div>
       </div>
     </div>
   );
 }
-// Fix imports
-import { User } from 'lucide-react';

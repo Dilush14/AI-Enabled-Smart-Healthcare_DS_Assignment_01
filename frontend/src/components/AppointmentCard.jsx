@@ -1,6 +1,13 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Video, FileText, CheckCircle2, XCircle, MoreVertical, MapPin } from 'lucide-react';
 
 export default function AppointmentCard({ appointment, role = 'patient' }) {
+  const navigate = useNavigate();
+  const paymentStatus = (appointment.paymentStatus || 'pending').toLowerCase();
+  const [showMenu, setShowMenu] = useState(false);
+  const isPatientActionsVisible = role === 'patient' && (appointment.canCancel || appointment.canPay);
+
   const getStatusColor = (status) => {
     switch(status) {
       case 'Upcoming': return 'bg-blue-50 text-blue-600 border-blue-100';
@@ -19,6 +26,31 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
     }
   };
 
+  const getPaymentStatusBadge = () => {
+    if (paymentStatus === 'completed') {
+      return 'bg-green-50 text-green-700 border-green-200';
+    }
+    if (paymentStatus === 'failed') {
+      return 'bg-red-50 text-red-700 border-red-200';
+    }
+    return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+  };
+
+  const getPaymentStatusLabel = () => {
+    if (paymentStatus === 'completed') return 'Paid';
+    if (paymentStatus === 'failed') return 'Payment Failed';
+    return 'Payment Pending';
+  };
+
+  const canJoinConsultation = appointment.status === 'Upcoming' && appointment.type.includes('Video') && paymentStatus === 'completed';
+  const needsPaymentForConsultation = appointment.status === 'Upcoming' && appointment.type.includes('Video') && paymentStatus !== 'completed';
+
+  const handleJoinConsultation = () => {
+    const appointmentId = appointment.id || appointment._id;
+    if (!appointmentId) return;
+    navigate(`/patient/consultation/${appointmentId}`);
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all">
       <div className="flex justify-between items-start mb-4">
@@ -26,9 +58,43 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
           {getStatusIcon(appointment.status)}
           {appointment.status}
         </div>
-        <button className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
-          <MoreVertical className="w-5 h-5" />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu((prev) => !prev)}
+            className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <MoreVertical className="w-5 h-5" />
+          </button>
+
+          {showMenu && isPatientActionsVisible && (
+            <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-10 p-2 space-y-1">
+              {appointment.canPay && (
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    appointment.onPay?.();
+                  }}
+                  disabled={appointment.actionLoading}
+                  className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-50 text-primary font-semibold disabled:opacity-60"
+                >
+                  {appointment.actionLoading ? 'Processing...' : 'Pay'}
+                </button>
+              )}
+              {appointment.canCancel && (
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    appointment.onCancel?.();
+                  }}
+                  disabled={appointment.actionLoading}
+                  className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 text-red-600 font-semibold disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-4 mb-5">
@@ -50,6 +116,9 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
       </div>
 
       <div className="space-y-2 mb-5">
+        <div className={`inline-flex items-center px-2.5 py-1 rounded-lg border text-xs font-bold ${getPaymentStatusBadge()}`}>
+          {getPaymentStatusLabel()}
+        </div>
         <div className="flex items-center gap-3 text-gray-600 bg-gray-50 p-3 rounded-xl border border-gray-100/50">
           <div className="bg-white p-1.5 rounded-lg border border-gray-100 shadow-sm">
             <Calendar className="w-4 h-4 text-primary" />
@@ -70,10 +139,23 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
         </div>
       </div>
 
-      {appointment.status === 'Upcoming' && appointment.type.includes('Video') && (
-        <button className="w-full bg-accent hover:bg-green-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-accent/20">
+      {canJoinConsultation && (
+        <button 
+          onClick={handleJoinConsultation}
+          className="w-full bg-accent hover:bg-green-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-accent/20"
+        >
           <Video className="w-5 h-5" />
           Join Consultation
+        </button>
+      )}
+
+      {needsPaymentForConsultation && (
+        <button
+          onClick={() => appointment.onPay?.()}
+          className="w-full bg-primary hover:bg-secondary text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-primary/20"
+        >
+          <Video className="w-5 h-5" />
+          Pay to Join Consultation
         </button>
       )}
       

@@ -1,10 +1,17 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Activity, LogOut, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
 export default function DashboardLayout({ role, links }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -64,10 +71,10 @@ export default function DashboardLayout({ role, links }) {
           </nav>
 
           <div className="p-4 border-t border-gray-100">
-            <Link to="/login" className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 rounded-xl hover:bg-red-50 transition-colors">
+            <button onClick={handleLogout} className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 rounded-xl hover:bg-red-50 transition-colors">
               <LogOut className="mr-3 h-5 w-5 text-red-500" />
               Logout
-            </Link>
+            </button>
           </div>
         </div>
       </aside>

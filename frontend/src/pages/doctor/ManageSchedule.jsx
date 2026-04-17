@@ -1,25 +1,87 @@
 import { Calendar, Clock, Plus, Trash2, Save } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { DoctorService } from '../../services/api';
 
 export default function ManageSchedule() {
   const [activeDay, setActiveDay] = useState('Monday');
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  
-  const [schedule, setSchedule] = useState({
-    Monday: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '17:00' }],
-    Tuesday: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '17:00' }],
-    Wednesday: [{ start: '09:00', end: '13:00' }],
-    Thursday: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '17:00' }],
-    Friday: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '16:00' }],
-    Saturday: [{ start: '10:00', end: '14:00' }],
+
+  const defaultSchedule = useMemo(() => ({
+    Monday: [],
+    Tuesday: [],
+    Wednesday: [],
+    Thursday: [],
+    Friday: [],
+    Saturday: [],
     Sunday: []
-  });
+  }), []);
+
+  const [schedule, setSchedule] = useState(defaultSchedule);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const getCurrentUserId = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?._id || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const toDayName = (dayKey) => dayKey.charAt(0).toUpperCase() + dayKey.slice(1).toLowerCase();
+
+  const parseAvailability = (availability) => {
+    const next = { ...defaultSchedule };
+
+    if (!Array.isArray(availability)) {
+      return next;
+    }
+
+    availability.forEach((slot) => {
+      const dayName = toDayName(slot?.day || '');
+      if (!next[dayName]) return;
+      if (!slot?.startTime || !slot?.endTime) return;
+      next[dayName].push({ start: slot.startTime, end: slot.endTime });
+    });
+
+    return next;
+  };
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      const userId = getCurrentUserId();
+      if (!userId) {
+        setError('Unable to identify current doctor account. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError('');
+        const availability = await DoctorService.getAvailability(userId);
+        setSchedule(parseAvailability(availability));
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Failed to load your saved schedule.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAvailability();
+  }, [defaultSchedule]);
 
   const handleAddTimeSlot = () => {
     setSchedule({
       ...schedule,
       [activeDay]: [...schedule[activeDay], { start: '00:00', end: '00:00' }]
     });
+    setSuccess('');
   };
 
   const handleRemoveTimeSlot = (index) => {
@@ -29,6 +91,78 @@ export default function ManageSchedule() {
       ...schedule,
       [activeDay]: newDaySchedule
     });
+    setSuccess('');
+  };
+
+  const handleTimeChange = (index, field, value) => {
+    const newDaySchedule = [...schedule[activeDay]];
+    newDaySchedule[index] = {
+      ...newDaySchedule[index],
+      [field]: value
+    };
+
+    setSchedule({
+      ...schedule,
+      [activeDay]: newDaySchedule
+    });
+    setSuccess('');
+  };
+
+  const toggleDayAvailability = () => {
+    const currentlyEnabled = schedule[activeDay].length > 0;
+    setSchedule({
+      ...schedule,
+      [activeDay]: currentlyEnabled ? [] : [{ start: '09:00', end: '17:00' }]
+    });
+    setSuccess('');
+  };
+
+  const validateSchedule = () => {
+    for (const day of days) {
+      for (const slot of schedule[day]) {
+        if (!slot.start || !slot.end) {
+          return `Please complete all time fields for ${day}.`;
+        }
+        if (slot.start >= slot.end) {
+          return `Start time must be earlier than end time on ${day}.`;
+        }
+      }
+    }
+    return '';
+  };
+
+  const handleSaveSchedule = async () => {
+    const userId = getCurrentUserId();
+    if (!userId) {
+      setError('Unable to identify current doctor account. Please sign in again.');
+      return;
+    }
+
+    const validationMessage = validateSchedule();
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
+    const availability = days.flatMap((day) =>
+      schedule[day].map((slot) => ({
+        day: day.toLowerCase(),
+        startTime: slot.start,
+        endTime: slot.end,
+      }))
+    );
+
+    try {
+      setSaving(true);
+      setError('');
+      setSuccess('');
+      await DoctorService.updateDoctor(userId, { availability });
+      setSuccess('Schedule saved successfully. Patients can now book only these slots.');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to save schedule. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -38,10 +172,18 @@ export default function ManageSchedule() {
           <h1 className="text-2xl font-bold text-text">Manage Schedule</h1>
           <p className="text-gray-500 mt-1">Set your weekly availability for patient appointments.</p>
         </div>
-        <button className="bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm shadow-primary/30">
-          <Save className="w-5 h-5" /> Save Schedule
+        <button
+          onClick={handleSaveSchedule}
+          disabled={saving || loading}
+          className="bg-primary hover:bg-secondary disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm shadow-primary/30"
+        >
+          <Save className="w-5 h-5" /> {saving ? 'Saving...' : 'Save Schedule'}
         </button>
       </div>
+
+      {error && <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {success && <p className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</p>}
+      {loading && <p className="text-sm text-gray-500">Loading saved schedule...</p>}
 
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[500px]">
         {/* Days sidebar */}
@@ -71,7 +213,12 @@ export default function ManageSchedule() {
             <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl shadow-inner border border-gray-100">
               <span className="text-sm font-bold text-gray-600">Accepting Appointments</span>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" className="sr-only peer" defaultChecked={schedule[activeDay].length > 0} />
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={schedule[activeDay].length > 0}
+                  onChange={toggleDayAvailability}
+                />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
               </label>
             </div>
@@ -97,12 +244,22 @@ export default function ManageSchedule() {
                  <div key={index} className="flex items-center gap-4 bg-gray-50 border border-gray-200 p-4 rounded-2xl shadow-sm">
                    <div className="flex-1">
                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Start Time</label>
-                     <input type="time" defaultValue={slot.start} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-bold text-text shadow-inner transition-all" />
+                     <input
+                      type="time"
+                      value={slot.start}
+                      onChange={(e) => handleTimeChange(index, 'start', e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-bold text-text shadow-inner transition-all"
+                     />
                    </div>
                    <div className="pt-6 hidden sm:block text-gray-400 font-bold">-</div>
                    <div className="flex-1">
                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">End Time</label>
-                     <input type="time" defaultValue={slot.end} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-bold text-text shadow-inner transition-all" />
+                     <input
+                      type="time"
+                      value={slot.end}
+                      onChange={(e) => handleTimeChange(index, 'end', e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-bold text-text shadow-inner transition-all"
+                     />
                    </div>
                    <div className="pt-6">
                      <button 

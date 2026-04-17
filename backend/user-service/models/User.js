@@ -5,11 +5,14 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['patient', 'doctor', 'admin'], required: true },
+  specialization: { type: String },
   phone: { type: String },
   address: { type: String },
   dateOfBirth: { type: Date },
   gender: { type: String, enum: ['male', 'female', 'other'] },
   isVerified: { type: Boolean, default: false },
+  resetPasswordOtpHash: { type: String },
+  resetPasswordOtpExpires: { type: Date },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

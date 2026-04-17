@@ -1,48 +1,257 @@
-import { Calendar, User, FileText, Search, Bell } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar, User, FileText, Search, Star } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AppointmentService, DoctorService, TelemedicineService } from '../../services/api';
 import AppointmentCard from '../../components/AppointmentCard';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function PatientDashboard() {
-  const upcomingAppointments = [
-    {
-      id: 1,
-      doctorName: 'Dr. Sarah Jenkins',
-      specialty: 'Cardiologist',
-      date: 'Today, 2:30 PM',
-      time: 'In 2 hours',
-      type: 'Video Consult',
-      status: 'Upcoming',
-      doctorImage: 'https://ui-avatars.com/api/?name=Sarah+Jenkins&background=0EA5E9&color=fff'
-    },
-    {
-      id: 2,
-      doctorName: 'Dr. Michael Chen',
-      specialty: 'Dermatologist',
-      date: 'Tomorrow, 10:00 AM',
-      time: '10:00 AM - 10:30 AM',
-      type: 'Clinic Visit',
-      status: 'Upcoming',
-      doctorImage: 'https://ui-avatars.com/api/?name=Michael+Chen&background=0EA5E9&color=fff'
+  const navigate = useNavigate();
+  const currentUser = (() => {
+    try {
+      const raw = localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
     }
-  ];
+  })();
 
-  const pastAppointments = [
-    {
-      id: 3,
-      doctorName: 'Dr. Emily Carter',
-      specialty: 'General Physician',
-      date: 'Aug 12, 2026',
-      time: '11:15 AM',
-      type: 'Video Consult',
-      status: 'Completed',
-      doctorImage: 'https://ui-avatars.com/api/?name=Emily+Carter&background=0EA5E9&color=fff'
+  const [appointments, setAppointments] = useState([]);
+  const [doctorsById, setDoctorsById] = useState({});
+  const [actionLoadingId, setActionLoadingId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reportsCount, setReportsCount] = useState(0);
+  const [healthReminders, setHealthReminders] = useState([]);
+  const [ratingDrafts, setRatingDrafts] = useState({});
+  const [ratingSubmittingDoctorId, setRatingSubmittingDoctorId] = useState('');
+  const [ratingMessage, setRatingMessage] = useState('');
+
+  const reminderTheme = {
+    diet: { bar: 'bg-orange-500', label: 'Diet' },
+    exercise: { bar: 'bg-accent', label: 'Exercise' },
+    sleep: { bar: 'bg-indigo-500', label: 'Sleep' },
+    lifestyle: { bar: 'bg-blue-500', label: 'Lifestyle' },
+    medications: { bar: 'bg-rose-500', label: 'Medication' },
+  };
+
+  const handleCancelAppointment = async (appointmentId) => {
+    try {
+      setActionLoadingId(appointmentId);
+      setError('');
+      await AppointmentService.cancelAppointment(appointmentId);
+      await loadAppointments();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to cancel appointment');
+    } finally {
+      setActionLoadingId('');
     }
-  ];
+  };
+
+  const handlePayAppointment = async (appointmentId) => {
+    navigate(`/patient/payments/${appointmentId}`);
+  };
+
+  const handleRatingStarClick = (doctorId, value) => {
+    setRatingMessage('');
+    setRatingDrafts((prev) => ({
+      ...prev,
+      [doctorId]: value,
+    }));
+  };
+
+  const handleSubmitRating = async (doctorId) => {
+    const selectedRating = Number(ratingDrafts[doctorId] || 0);
+    if (!selectedRating) {
+      setRatingMessage('Please select a rating before submitting.');
+      return;
+    }
+
+    try {
+      setRatingSubmittingDoctorId(doctorId);
+      setRatingMessage('');
+      await DoctorService.rateDoctor(doctorId, { rating: selectedRating });
+      setRatingMessage('Rating submitted successfully.');
+      await loadAppointments();
+    } catch (err) {
+      setRatingMessage(err?.response?.data?.message || 'Failed to submit rating');
+    } finally {
+      setRatingSubmittingDoctorId('');
+    }
+  };
+
+  const loadAppointments = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await AppointmentService.getAppointments();
+      const list = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
+      setAppointments(list);
+
+      // If appointment records only store doctorId as a string/ObjectId,
+      // resolve doctor profile details once for card rendering.
+      const doctorsResponse = await DoctorService.getDoctors();
+      const doctorsList = Array.isArray(doctorsResponse)
+        ? doctorsResponse
+        : Array.isArray(doctorsResponse?.value)
+          ? doctorsResponse.value
+          : Array.isArray(doctorsResponse?.data)
+            ? doctorsResponse.data
+            : [];
+
+      const dictionary = doctorsList.reduce((acc, doctor) => {
+        const key = doctor?._id || doctor?.id;
+        if (key) {
+          acc[key] = doctor;
+        }
+        return acc;
+      }, {});
+
+      setDoctorsById(dictionary);
+
+      try {
+        const reportsResponse = await TelemedicineService.getPatientReports();
+        const reportsList = Array.isArray(reportsResponse)
+          ? reportsResponse
+          : Array.isArray(reportsResponse?.data)
+            ? reportsResponse.data
+            : [];
+        setReportsCount(reportsList.length);
+
+        const sortedReports = [...reportsList].sort(
+          (a, b) => new Date(b?.uploadedAt || 0).getTime() - new Date(a?.uploadedAt || 0).getTime()
+        );
+        const latestReport = sortedReports[0];
+        const dailyHabits = latestReport?.aiAnalysis?.dailyHabits;
+
+        if (dailyHabits && typeof dailyHabits === 'object') {
+          const reminders = Object.entries(dailyHabits)
+            .flatMap(([key, values]) => {
+              if (!Array.isArray(values)) return [];
+              return values.slice(0, 2).map((text, idx) => ({
+                id: `${key}-${idx}`,
+                category: reminderTheme[key]?.label || 'Health',
+                barClass: reminderTheme[key]?.bar || 'bg-blue-500',
+                text,
+              }));
+            })
+            .slice(0, 5);
+          setHealthReminders(reminders);
+        } else {
+          setHealthReminders([]);
+        }
+      } catch {
+        setReportsCount(0);
+        setHealthReminders([]);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load appointments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
+  const formatDate = (value) => {
+    if (!value) return 'Date not set';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const mapStatus = (status) => {
+    const normalized = (status || '').toLowerCase();
+    if (normalized === 'completed') return 'Completed';
+    if (normalized === 'cancelled') return 'Cancelled';
+    return 'Upcoming';
+  };
+
+  const mappedAppointments = useMemo(
+    () =>
+      appointments.map((app) => {
+        const appointmentDoctor = app.doctorId && typeof app.doctorId === 'object' ? app.doctorId : null;
+        const doctorLookupId = typeof app.doctorId === 'string' ? app.doctorId : app.doctorId?._id;
+        const lookedUpDoctor = doctorLookupId ? doctorsById[doctorLookupId] : null;
+        const doctor = appointmentDoctor || lookedUpDoctor || {};
+
+        const notes = (app.notes || '').toLowerCase();
+        const type = app.type
+          || app.appointmentType
+          || (notes.includes('clinic visit') || notes.includes('in-person') ? 'Clinic Visit' : 'Video Consult');
+
+        const doctorName = doctor.userId?.name || doctor.name || app.doctorName || 'Doctor';
+        const specialty = doctor.specialization || app.specialization || 'Specialist';
+        const doctorImage = doctor.userId?.profilePhotoUrl || doctor.profileImage;
+
+        return {
+          id: app._id,
+          doctorId: doctor._id || doctor.id || doctorLookupId || '',
+          doctorName,
+          specialty,
+          date: formatDate(app.date),
+          time: app.time || 'Time not set',
+          type,
+          status: mapStatus(app.status),
+          paymentStatus: (app.paymentStatus || 'pending').toLowerCase(),
+          canCancel: (app.status || '').toLowerCase() !== 'cancelled' && (app.status || '').toLowerCase() !== 'completed',
+          canPay: (app.status || '').toLowerCase() === 'confirmed' && (app.paymentStatus || 'pending').toLowerCase() !== 'completed',
+          onCancel: () => handleCancelAppointment(app._id),
+          onPay: () => handlePayAppointment(app._id),
+          actionLoading: actionLoadingId === app._id,
+          doctorImage,
+        };
+      }),
+    [appointments, doctorsById, actionLoadingId]
+  );
+
+  const upcomingAppointments = mappedAppointments.filter((app) => app.status === 'Upcoming');
+  const pastAppointments = mappedAppointments.filter((app) => app.status !== 'Upcoming');
+
+  const doctorsToRate = useMemo(() => {
+    const completed = mappedAppointments.filter((app) => app.status === 'Completed' && app.doctorId);
+    const unique = new Map();
+
+    completed.forEach((app) => {
+      if (unique.has(app.doctorId)) {
+        return;
+      }
+
+      const doctorDetails = doctorsById[app.doctorId] || {};
+      const ratingsList = Array.isArray(doctorDetails.ratings) ? doctorDetails.ratings : [];
+      const myRatingEntry = ratingsList.find((entry) => {
+        const patientId = entry?.patientId?._id || entry?.patientId;
+        return String(patientId || '') === String(currentUser?._id || '');
+      });
+
+      unique.set(app.doctorId, {
+        doctorId: app.doctorId,
+        doctorName: app.doctorName,
+        specialty: app.specialty,
+        averageRating: Number(doctorDetails.ratingAverage || 0),
+        ratingCount: Number(doctorDetails.ratingCount || 0),
+        myRating: Number(myRatingEntry?.rating || 0),
+      });
+    });
+
+    return Array.from(unique.values());
+  }, [mappedAppointments, doctorsById, currentUser?._id]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text">Good morning, John!</h1>
+          <h1 className="text-2xl font-bold text-text">Good morning, {currentUser?.name || 'Patient'}!</h1>
           <p className="text-gray-500 mt-1">Here is your health overview for today.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -54,10 +263,7 @@ export default function PatientDashboard() {
               className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary w-full md:w-64 bg-white"
             />
           </div>
-          <button className="bg-white p-2 border border-gray-200 rounded-xl text-gray-600 hover:text-primary transition-colors relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
-          </button>
+          <NotificationBell />
         </div>
       </div>
 
@@ -68,7 +274,7 @@ export default function PatientDashboard() {
           </div>
           <div>
             <p className="text-gray-500 text-sm font-medium">Upcoming</p>
-            <h3 className="text-xl font-bold text-text">2 Appointments</h3>
+            <h3 className="text-xl font-bold text-text">{upcomingAppointments.length} Appointments</h3>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
@@ -77,7 +283,7 @@ export default function PatientDashboard() {
           </div>
           <div>
             <p className="text-gray-500 text-sm font-medium">Consulted</p>
-            <h3 className="text-xl font-bold text-text">12 Doctors</h3>
+            <h3 className="text-xl font-bold text-text">{new Set(mappedAppointments.map((app) => app.doctorName)).size} Doctors</h3>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
@@ -86,10 +292,10 @@ export default function PatientDashboard() {
           </div>
           <div>
             <p className="text-gray-500 text-sm font-medium">Reports</p>
-            <h3 className="text-xl font-bold text-text">5 Documents</h3>
+            <h3 className="text-xl font-bold text-text">{reportsCount} Documents</h3>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 bg-gradient-to-r from-primary to-secondary text-white border-transparent">
+        <div className="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4 bg-linear-to-r from-primary to-secondary text-white border-transparent">
           <div>
             <p className="text-primary-100 text-sm font-medium">Need help?</p>
             <h3 className="font-bold mb-1">Book new visit</h3>
@@ -100,24 +306,42 @@ export default function PatientDashboard() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+              {error}
+            </div>
+          )}
+
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg font-bold text-text">Upcoming Appointments</h2>
-            <button className="text-sm text-primary font-medium hover:underline">View All</button>
+            <Link to="/patient/calendar" className="text-sm text-primary font-medium hover:underline">View All</Link>
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {upcomingAppointments.map(app => (
-              <AppointmentCard key={app.id} appointment={app} role="patient" />
-            ))}
-          </div>
+          {loading ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 text-gray-500">Loading appointments...</div>
+          ) : upcomingAppointments.length === 0 ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 text-gray-500">No upcoming appointments.</div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {upcomingAppointments.map((app) => (
+                <AppointmentCard key={app.id} appointment={app} role="patient" />
+              ))}
+            </div>
+          )}
 
           <div className="flex justify-between items-center mt-8 mb-2">
             <h2 className="text-lg font-bold text-text">Recent History</h2>
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {pastAppointments.map(app => (
-              <AppointmentCard key={app.id} appointment={app} role="patient" />
-            ))}
-          </div>
+          {loading ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 text-gray-500">Loading history...</div>
+          ) : pastAppointments.length === 0 ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-5 text-gray-500">No past appointments yet.</div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {pastAppointments.map((app) => (
+                <AppointmentCard key={app.id} appointment={app} role="patient" />
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -126,20 +350,78 @@ export default function PatientDashboard() {
               <h3 className="font-bold text-text">Health Reminders</h3>
             </div>
             <div className="p-5 space-y-4">
-              <div className="flex gap-4">
-                <div className="w-1.5 bg-accent rounded-full shrink-0"></div>
-                <div>
-                  <h4 className="font-bold text-sm text-text">Take Vitamin C</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Everyday after breakfast</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="w-1.5 bg-blue-500 rounded-full shrink-0"></div>
-                <div>
-                  <h4 className="font-bold text-sm text-text">Drink Water</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Goal: 2.5 Liters daily</p>
-                </div>
-              </div>
+              {healthReminders.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Upload a report to receive AI-generated daily health reminders.
+                </p>
+              ) : (
+                healthReminders.map((item) => (
+                  <div key={item.id} className="flex gap-4">
+                    <div className={`w-1.5 ${item.barClass} rounded-full shrink-0`}></div>
+                    <div>
+                      <h4 className="font-bold text-sm text-text">{item.category}</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">{item.text}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-text">Rate Your Doctors</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              {ratingMessage && (
+                <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700">
+                  {ratingMessage}
+                </p>
+              )}
+              {doctorsToRate.length === 0 ? (
+                <p className="text-sm text-gray-500">Complete an appointment to add a doctor rating.</p>
+              ) : (
+                doctorsToRate.map((item) => {
+                  const selectedRating = Number(ratingDrafts[item.doctorId] || item.myRating || 0);
+
+                  return (
+                    <div key={item.doctorId} className="rounded-xl border border-gray-100 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="font-bold text-text text-sm">{item.doctorName}</h4>
+                          <p className="text-xs text-gray-500">{item.specialty}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-gray-500">Avg</p>
+                          <p className="text-sm font-bold text-text">{item.averageRating > 0 ? item.averageRating.toFixed(1) : '-'}</p>
+                          <p className="text-[11px] text-gray-500">{item.ratingCount} ratings</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <button
+                            key={`${item.doctorId}-${value}`}
+                            onClick={() => handleRatingStarClick(item.doctorId, value)}
+                            className="p-1"
+                            title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                          >
+                            <Star className={`w-5 h-5 ${value <= selectedRating ? 'text-yellow-500 fill-yellow-400' : 'text-gray-300'}`} />
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => handleSubmitRating(item.doctorId)}
+                        disabled={ratingSubmittingDoctorId === item.doctorId}
+                        className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-secondary disabled:opacity-60"
+                      >
+                        {ratingSubmittingDoctorId === item.doctorId ? 'Saving...' : 'Submit Rating'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

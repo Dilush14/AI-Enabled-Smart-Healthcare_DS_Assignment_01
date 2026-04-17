@@ -7,7 +7,12 @@ const register = async (req, res) => {
       name: Joi.string().required(),
       email: Joi.string().email().required(),
       password: Joi.string().min(6).required(),
-      role: Joi.string().valid('patient', 'doctor', 'admin').required()
+      role: Joi.string().valid('patient', 'doctor', 'admin').required(),
+      specialization: Joi.when('role', {
+        is: 'doctor',
+        then: Joi.string().trim().min(2).required(),
+        otherwise: Joi.string().trim().optional().allow('')
+      })
     });
     const { error } = schema.validate(req.body);
     if (error) return res.status(400).json({ message: error.details[0].message });
@@ -28,4 +33,55 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+const forgotPassword = async (req, res) => {
+  try {
+    const schema = Joi.object({
+      email: Joi.string().email().required(),
+    });
+    const { error } = schema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    await authService.requestPasswordReset(req.body.email);
+
+    return res.json({
+      message: 'If an account exists with this email, a password reset OTP has been sent.',
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
+const verifyResetOtp = async (req, res) => {
+  try {
+    const schema = Joi.object({
+      email: Joi.string().email().required(),
+      otp: Joi.string().pattern(/^\d{6}$/).required(),
+    });
+    const { error } = schema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    await authService.verifyPasswordResetOtp(req.body.email, req.body.otp);
+    return res.json({ message: 'OTP verified successfully.' });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const schema = Joi.object({
+      email: Joi.string().email().required(),
+      otp: Joi.string().pattern(/^\d{6}$/).required(),
+      password: Joi.string().min(6).required(),
+    });
+    const { error } = schema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    await authService.resetPassword(req.body.email, req.body.otp, req.body.password);
+    return res.json({ message: 'Password reset successful. You can now log in.' });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
+module.exports = { register, login, forgotPassword, verifyResetOtp, resetPassword };
