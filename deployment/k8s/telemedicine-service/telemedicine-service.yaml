@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemedicine-service
+  namespace: healthcare
+  labels:
+    app: telemedicine-service
+    app.kubernetes.io/part-of: smart-healthcare
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telemedicine-service
+  template:
+    metadata:
+      labels:
+        app: telemedicine-service
+        app.kubernetes.io/part-of: smart-healthcare
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: telemedicine-service
+          image: smart-healthcare/telemedicine-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3004
+          envFrom:
+            - configMapRef:
+                name: healthcare-config
+            - secretRef:
+                name: healthcare-secret
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: TELEMEDICINE_SERVICE_PORT
+          livenessProbe:
+            tcpSocket:
+              port: 3004
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 3004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: telemedicine-uploads
+              mountPath: /uploads
+      volumes:
+        - name: telemedicine-uploads
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telemedicine-service
+  namespace: healthcare
+  labels:
+    app: telemedicine-service
+    app.kubernetes.io/part-of: smart-healthcare
+spec:
+  type: ClusterIP
+  selector:
+    app: telemedicine-service
+  ports:
+    - name: http
+      port: 3004
+      targetPort: 3004
