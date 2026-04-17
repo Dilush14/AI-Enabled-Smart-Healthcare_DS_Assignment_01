@@ -42,6 +42,9 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
     return 'Payment Pending';
   };
 
+  const canJoinConsultation = appointment.status === 'Upcoming' && appointment.type.includes('Video') && paymentStatus === 'completed';
+  const needsPaymentForConsultation = appointment.status === 'Upcoming' && appointment.type.includes('Video') && paymentStatus !== 'completed';
+
   const handleJoinConsultation = () => {
     const appointmentId = appointment.id || appointment._id;
     if (!appointmentId) return;
@@ -136,13 +139,23 @@ export default function AppointmentCard({ appointment, role = 'patient' }) {
         </div>
       </div>
 
-      {appointment.status === 'Upcoming' && appointment.type.includes('Video') && (
+      {canJoinConsultation && (
         <button 
           onClick={handleJoinConsultation}
           className="w-full bg-accent hover:bg-green-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-accent/20"
         >
           <Video className="w-5 h-5" />
           Join Consultation
+        </button>
+      )}
+
+      {needsPaymentForConsultation && (
+        <button
+          onClick={() => appointment.onPay?.()}
+          className="w-full bg-primary hover:bg-secondary text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm shadow-primary/20"
+        >
+          <Video className="w-5 h-5" />
+          Pay to Join Consultation
         </button>
       )}
       

@@ -76,6 +76,8 @@ export const TelemedicineService = {
   getSessionByAppointment: (appointmentId) => api.get(`/telemedicine/session/appointment/${appointmentId}`),
   updateSessionStatus: (id, status) => api.put(`/telemedicine/session/${id}/status`, { status }),
   endSession: (id, notes) => api.put(`/telemedicine/session/${id}/end`, { notes }),
+  updateConsultationNotes: (id, consultationNotes) => api.put(`/telemedicine/session/${id}/consultation-notes`, { consultationNotes }),
+  updatePrescription: (id, prescription) => api.put(`/telemedicine/session/${id}/prescription`, prescription),
   uploadReport: (formData) => {
     const apiWithFormData = axios.create({
       baseURL: '/api',
