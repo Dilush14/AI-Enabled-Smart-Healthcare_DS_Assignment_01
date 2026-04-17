@@ -241,7 +241,7 @@ export default function DoctorDashboard() {
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-50 flex justify-between items-center">
               <h2 className="text-lg font-bold text-text">Today's Schedule</h2>
-              <button className="text-primary text-sm font-bold hover:underline">View All</button>
+              <Link to="/doctor/calendar" className="text-primary text-sm font-bold hover:underline">View All</Link>
             </div>
             <div className="divide-y divide-gray-50">
               {loading && <div className="p-6 text-gray-500">Loading schedule...</div>}

@@ -56,6 +56,7 @@ export const DoctorService = {
 
 export const AppointmentService = {
   getAppointments: () => api.get('/appointments'),
+  getAvailableSlots: (doctorId, date) => api.get(`/appointments/doctors/${doctorId}/slots`, { params: { date } }),
   bookAppointment: (data) => api.post('/appointments/book', data),
   cancelAppointment: (id) => api.put(`/appointments/${id}/cancel`),
   updateAppointmentStatus: (id, status) => api.patch(`/appointments/${id}/status`, { status }),
