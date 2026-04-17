@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, User, FileText, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { AppointmentService, DoctorService, PaymentService, TelemedicineService } from '../../services/api';
 import AppointmentCard from '../../components/AppointmentCard';
 import NotificationBell from '../../components/NotificationBell';
@@ -286,7 +287,7 @@ export default function PatientDashboard() {
 
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg font-bold text-text">Upcoming Appointments</h2>
-            <button className="text-sm text-primary font-medium hover:underline">View All</button>
+            <Link to="/patient/calendar" className="text-sm text-primary font-medium hover:underline">View All</Link>
           </div>
           {loading ? (
             <div className="bg-white border border-gray-100 rounded-2xl p-5 text-gray-500">Loading appointments...</div>

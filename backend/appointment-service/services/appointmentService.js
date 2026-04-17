@@ -457,17 +457,51 @@ class AppointmentService {
     return appointment;
   }
 
-  // Get doctor's available slots (mock implementation)
+  async getDoctorAvailability(doctorId) {
+    const response = await axios.get(`${API_GATEWAY_URL}/api/doctors/${doctorId}`);
+    const availability = response?.data?.availability;
+    return Array.isArray(availability) ? availability : [];
+  }
+
+  getDayKey(date) {
+    return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  }
+
+  getDayBounds(date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
+  // Get doctor's available slots based on saved weekly availability
   async getAvailableSlots(doctorId, date) {
     try {
-      // Here you can add logic to fetch doctor's availability
-      // For now, return standard slots
-      const slots = this.generateTimeSlots('09:00', '17:00', 30);
+      const selectedDate = new Date(date);
+      if (Number.isNaN(selectedDate.getTime())) {
+        throw new Error('Invalid date provided');
+      }
+
+      const dayKey = this.getDayKey(selectedDate);
+      const doctorAvailability = await this.getDoctorAvailability(doctorId);
+      const dayAvailability = doctorAvailability.filter((slot) => slot.day === dayKey);
+
+      if (dayAvailability.length === 0) {
+        return [];
+      }
+
+      const slots = [
+        ...new Set(
+          dayAvailability.flatMap((slot) => this.generateTimeSlots(slot.startTime, slot.endTime, 30))
+        )
+      ].sort();
+      const { start, end } = this.getDayBounds(selectedDate);
       
       // Filter out already booked slots
       const bookedAppointments = await Appointment.find({
-        doctorId: doctorId,
-        date: new Date(date),
+        doctorId,
+        date: { $gte: start, $lte: end },
         status: { $in: ['pending', 'confirmed'] }
       });
 

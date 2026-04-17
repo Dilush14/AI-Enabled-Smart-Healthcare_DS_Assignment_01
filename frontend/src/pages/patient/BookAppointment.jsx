@@ -1,9 +1,10 @@
 import { Calendar as CalendarIcon, Clock, ChevronLeft, CheckCircle } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { AppointmentService, DoctorService } from '../../services/api';
 
 export default function BookAppointment() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [step, setStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -11,8 +12,10 @@ export default function BookAppointment() {
   const [appointmentType, setAppointmentType] = useState('Video Consult');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState('');
   const [doctorName, setDoctorName] = useState('Doctor');
+  const [times, setTimes] = useState([]);
 
   const dates = useMemo(() => {
     const base = new Date();
@@ -43,16 +46,17 @@ export default function BookAppointment() {
     }
   }, [dates, selectedDate]);
 
-  const times = ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '01:00 PM', '02:00 PM'];
+  const formatTo12Hour = (value) => {
+    const [hoursRaw, minutesRaw] = String(value || '').split(':');
+    const hours = Number(hoursRaw);
+    const minutes = Number(minutesRaw);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+      return value;
+    }
 
-  const to24Hour = (value) => {
-    const [time, period] = value.split(' ');
-    let [hours, minutes] = time.split(':').map(Number);
-
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const normalizedHours = hours % 12 === 0 ? 12 : hours % 12;
+    return `${String(normalizedHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
   };
 
   const bookAppointment = async () => {
@@ -67,7 +71,7 @@ export default function BookAppointment() {
       await AppointmentService.bookAppointment({
         doctorId: id,
         date: selectedDate.apiDate,
-        time: to24Hour(selectedTime),
+        time: selectedTime,
         notes,
       });
 
@@ -78,6 +82,29 @@ export default function BookAppointment() {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    const loadSlots = async () => {
+      if (!id || !selectedDate?.apiDate) return;
+
+      try {
+        setLoadingSlots(true);
+        setError('');
+        setSelectedTime('');
+
+        const response = await AppointmentService.getAvailableSlots(id, selectedDate.apiDate);
+        const slots = Array.isArray(response?.data) ? response.data : [];
+        setTimes(slots);
+      } catch (err) {
+        setTimes([]);
+        setError(err?.response?.data?.message || 'Failed to load available time slots.');
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    loadSlots();
+  }, [id, selectedDate]);
 
   useEffect(() => {
     const loadDoctor = async () => {
@@ -101,13 +128,16 @@ export default function BookAppointment() {
         </div>
         <h1 className="text-3xl font-extrabold text-text mb-4">Appointment Confirmed!</h1>
         <p className="text-lg text-gray-500 mb-8 max-w-md mx-auto">
-          Your {appointmentType.toLowerCase()} with {doctorName} is confirmed for <strong>{selectedDate?.label}</strong> at <strong>{selectedTime}</strong>.
+          Your {appointmentType.toLowerCase()} with {doctorName} is confirmed for <strong>{selectedDate?.label}</strong> at <strong>{formatTo12Hour(selectedTime)}</strong>.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link to="/patient/dashboard" className="bg-primary hover:bg-secondary text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/30">
             Go to Dashboard
           </Link>
-          <button className="bg-white border border-gray-200 text-gray-700 hover:border-gray-300 px-8 py-3.5 rounded-xl font-bold transition-all">
+          <button
+            onClick={() => navigate('/patient/calendar')}
+            className="bg-white border border-gray-200 text-gray-700 hover:border-gray-300 px-8 py-3.5 rounded-xl font-bold transition-all"
+          >
             Add to Calendar
           </button>
         </div>
@@ -136,7 +166,7 @@ export default function BookAppointment() {
                 <button
                   key={date.apiDate}
                   onClick={() => setSelectedDate(date)}
-                  className={`min-w-[120px] p-4 rounded-2xl border text-center transition-all ${
+                  className={`min-w-30 p-4 rounded-2xl border text-center transition-all ${
                     selectedDate === date 
                       ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm shadow-primary/10' 
                       : 'border-gray-100 bg-white text-gray-500 hover:border-primary/30'
@@ -153,6 +183,10 @@ export default function BookAppointment() {
             <h2 className="text-lg font-bold text-text mb-4 flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary" /> Select Time
             </h2>
+            {loadingSlots && <p className="text-sm text-gray-500 mb-4">Loading available slots...</p>}
+            {!loadingSlots && times.length === 0 && (
+              <p className="text-sm text-gray-500 mb-4">No available slots for this day. Please choose another date.</p>
+            )}
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {times.map(time => (
                 <button
@@ -164,7 +198,7 @@ export default function BookAppointment() {
                       : 'border-gray-100 bg-white text-gray-600 hover:border-primary/50'
                   }`}
                 >
-                  {time}
+                  {formatTo12Hour(time)}
                 </button>
               ))}
             </div>
@@ -204,7 +238,7 @@ export default function BookAppointment() {
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 placeholder="Briefly describe your symptoms or reason for visit..."
-                className="w-full p-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-gray-50 min-h-[120px]"
+                className="w-full p-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-gray-50 min-h-30"
               ></textarea>
             </div>
           </div>
