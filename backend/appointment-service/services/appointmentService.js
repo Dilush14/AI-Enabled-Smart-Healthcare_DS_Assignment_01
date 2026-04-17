@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006/api/notifications/internal';
 const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || 'medikaline-internal-token';
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3000';
 
 async function sendNotification(payload) {
   try {
@@ -43,11 +44,13 @@ class AppointmentService {
     }
 
     const doctor = await doctorsCollection.findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
-    if (!doctor?.userId) {
-      return { doctor, user: null };
+    if (doctor?.userId) {
+      const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctor.userId) });
+      return { doctor, user };
     }
 
-    const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctor.userId) });
+    // Fallback: some appointments may store doctor userId directly.
+    const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
     return { doctor, user };
   }
 
@@ -278,8 +281,10 @@ class AppointmentService {
         metadata: {
           appointmentId: appointment._id,
           doctorId: appointment.doctorId,
-          status: 'pending',
+          doctorName: doctorUser?.name || 'Doctor',
           patientName: patient?.name || '',
+          status: 'pending',
+          appointmentLabel,
         },
       }),
       doctorUser?._id ? sendNotification({
@@ -290,7 +295,10 @@ class AppointmentService {
         metadata: {
           appointmentId: appointment._id,
           patientId: appointment.patientId,
+          doctorName: doctorUser?.name || '',
+          patientName: patient?.name || 'Patient',
           status: 'pending',
+          appointmentLabel,
         },
       }) : Promise.resolve(),
     ]);
@@ -301,7 +309,7 @@ class AppointmentService {
   // Verify doctor exists
   async verifyDoctor(doctorId) {
     try {
-      const response = await axios.get(`http://localhost:3000/api/doctors/${doctorId}`);
+      const response = await axios.get(`${API_GATEWAY_URL}/api/doctors/${doctorId}`);
       return response.data && response.data._id;
     } catch (error) {
       if (error.response?.status === 404) {
@@ -372,36 +380,74 @@ class AppointmentService {
     const appointmentLabel = this.formatAppointmentLabel(appointment);
 
     if (role === 'doctor' && status === 'confirmed') {
-      await sendNotification({
-        userId: appointment.patientId,
-        title: 'Appointment accepted',
-        type: 'appointment_accepted',
-        message: `Your appointment ${appointmentLabel} has been accepted. You can now pay for it.`,
-        metadata: {
-          appointmentId: appointment._id,
-          doctorId: appointment.doctorId,
-          status,
-        },
-      });
+      await Promise.all([
+        sendNotification({
+          userId: appointment.patientId,
+          title: 'Appointment accepted',
+          type: 'appointment_accepted',
+          message: `Your appointment ${appointmentLabel} has been accepted. You can now pay for it.`,
+          metadata: {
+            appointmentId: appointment._id,
+            doctorId: appointment.doctorId,
+            doctorName: doctorUser?.name || 'Doctor',
+            patientName: patient?.name || '',
+            status,
+            appointmentLabel,
+          },
+        }),
+        doctorUser?._id ? sendNotification({
+          userId: doctorUser._id,
+          title: 'Appointment accepted successfully',
+          type: 'appointment_accepted',
+          message: `You accepted the appointment ${appointmentLabel} for ${patient?.name || 'the patient'}.`,
+          metadata: {
+            appointmentId: appointment._id,
+            patientId: appointment.patientId,
+            doctorName: doctorUser?.name || '',
+            patientName: patient?.name || 'Patient',
+            status,
+            appointmentLabel,
+          },
+        }) : Promise.resolve(),
+      ]);
     }
 
     if (status === 'cancelled') {
-      const recipientId = role === 'patient' ? doctorUser?._id : appointment.patientId;
-      const recipientName = role === 'patient' ? `Dr. ${doctorUser?.name || 'your doctor'}` : patient?.name || 'the patient';
+      const cancelledByLabel = role === 'patient'
+        ? (patient?.name || 'The patient')
+        : `Dr. ${doctorUser?.name || 'your doctor'}`;
+      const actorId = role === 'patient' ? appointment.patientId : doctorUser?._id;
+      const counterpartId = role === 'patient' ? doctorUser?._id : appointment.patientId;
 
-      if (recipientId) {
-        await sendNotification({
-          userId: recipientId,
+      await Promise.all([
+        counterpartId ? sendNotification({
+          userId: counterpartId,
           title: 'Appointment cancelled',
           type: 'appointment_cancelled',
-          message: `${patient?.name || 'The patient'} cancelled the appointment ${appointmentLabel}.`,
+          message: `${cancelledByLabel} cancelled the appointment ${appointmentLabel}.`,
           metadata: {
             appointmentId: appointment._id,
             cancelledBy: role,
-            recipientName,
+            counterpartyId: actorId,
+            doctorName: doctorUser?.name || '',
+            patientName: patient?.name || '',
+            appointmentLabel,
           },
-        });
-      }
+        }) : Promise.resolve(),
+        actorId ? sendNotification({
+          userId: actorId,
+          title: 'Appointment cancellation confirmed',
+          type: 'appointment_cancelled',
+          message: `You cancelled the appointment ${appointmentLabel}.`,
+          metadata: {
+            appointmentId: appointment._id,
+            cancelledBy: role,
+            doctorName: doctorUser?.name || '',
+            patientName: patient?.name || '',
+            appointmentLabel,
+          },
+        }) : Promise.resolve(),
+      ]);
     }
 
     if (role === 'doctor' && status === 'completed') {
@@ -413,7 +459,10 @@ class AppointmentService {
         metadata: {
           appointmentId: appointment._id,
           doctorId: appointment.doctorId,
+          doctorName: doctorUser?.name || 'Doctor',
+          patientName: patient?.name || '',
           status,
+          appointmentLabel,
         },
       });
     }
@@ -431,7 +480,7 @@ class AppointmentService {
       params.page = page;
       params.limit = limit;
 
-      const response = await axios.get('http://localhost:3000/api/doctors', { params });
+      const response = await axios.get(`${API_GATEWAY_URL}/api/doctors`, { params });
       
       return {
         doctors: response.data || [],
@@ -456,17 +505,51 @@ class AppointmentService {
     return appointment;
   }
 
-  // Get doctor's available slots (mock implementation)
+  async getDoctorAvailability(doctorId) {
+    const response = await axios.get(`${API_GATEWAY_URL}/api/doctors/${doctorId}`);
+    const availability = response?.data?.availability;
+    return Array.isArray(availability) ? availability : [];
+  }
+
+  getDayKey(date) {
+    return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  }
+
+  getDayBounds(date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
+  // Get doctor's available slots based on saved weekly availability
   async getAvailableSlots(doctorId, date) {
     try {
-      // Here you can add logic to fetch doctor's availability
-      // For now, return standard slots
-      const slots = this.generateTimeSlots('09:00', '17:00', 30);
+      const selectedDate = new Date(date);
+      if (Number.isNaN(selectedDate.getTime())) {
+        throw new Error('Invalid date provided');
+      }
+
+      const dayKey = this.getDayKey(selectedDate);
+      const doctorAvailability = await this.getDoctorAvailability(doctorId);
+      const dayAvailability = doctorAvailability.filter((slot) => slot.day === dayKey);
+
+      if (dayAvailability.length === 0) {
+        return [];
+      }
+
+      const slots = [
+        ...new Set(
+          dayAvailability.flatMap((slot) => this.generateTimeSlots(slot.startTime, slot.endTime, 30))
+        )
+      ].sort();
+      const { start, end } = this.getDayBounds(selectedDate);
       
       // Filter out already booked slots
       const bookedAppointments = await Appointment.find({
-        doctorId: doctorId,
-        date: new Date(date),
+        doctorId,
+        date: { $gte: start, $lte: end },
         status: { $in: ['pending', 'confirmed'] }
       });
 

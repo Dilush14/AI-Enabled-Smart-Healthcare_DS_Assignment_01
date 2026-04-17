@@ -7,7 +7,12 @@ const register = async (req, res) => {
       name: Joi.string().required(),
       email: Joi.string().email().required(),
       password: Joi.string().min(6).required(),
-      role: Joi.string().valid('patient', 'doctor', 'admin').required()
+      role: Joi.string().valid('patient', 'doctor', 'admin').required(),
+      specialization: Joi.when('role', {
+        is: 'doctor',
+        then: Joi.string().trim().min(2).required(),
+        otherwise: Joi.string().trim().optional().allow('')
+      })
     });
     const { error } = schema.validate(req.body);
     if (error) return res.status(400).json({ message: error.details[0].message });

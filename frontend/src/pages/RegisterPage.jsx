@@ -26,6 +26,7 @@ export default function RegisterPage() {
         email: form.email,
         password: form.password,
         role,
+        specialization: role === 'doctor' ? form.specialization : undefined,
       });
 
       const loginResponse = await UserService.login({

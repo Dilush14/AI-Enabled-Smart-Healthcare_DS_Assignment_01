@@ -71,6 +71,11 @@ class DoctorService {
       return null;
     }
 
+    const doctorByUserId = await Doctor.findOne({ userId }).populate('userId');
+    if (doctorByUserId) {
+      return doctorByUserId;
+    }
+
     const usersCollection = mongoose.connection.collection('users');
     const user = await usersCollection.findOne({
       _id: userId,
@@ -81,23 +86,42 @@ class DoctorService {
   }
 
   async updateDoctor(id, updates) {
-    const updatedDoctor = await Doctor.findByIdAndUpdate(id, updates, { new: true });
+    const usersCollection = mongoose.connection.collection('users');
+    let updatedDoctor = await Doctor.findByIdAndUpdate(id, updates, { new: true }).populate('userId');
+
+    if (!updatedDoctor) {
+      const userId = this.toObjectId(id);
+      if (userId) {
+        updatedDoctor = await Doctor.findOneAndUpdate(
+          { userId },
+          updates,
+          { new: true }
+        ).populate('userId');
+      }
+    }
+
     if (updatedDoctor) {
+      const targetUserId = updatedDoctor.userId?._id || updatedDoctor.userId;
+      if (targetUserId) {
+        await usersCollection.updateOne(
+          { _id: targetUserId, role: 'doctor' },
+          { $set: updates }
+        );
+      }
       return updatedDoctor;
     }
 
-    const userId = this.toObjectId(id);
-    if (!userId) {
+    const fallbackUserId = this.toObjectId(id);
+    if (!fallbackUserId) {
       return null;
     }
 
-    const usersCollection = mongoose.connection.collection('users');
     await usersCollection.updateOne(
-      { _id: userId, role: 'doctor' },
+      { _id: fallbackUserId, role: 'doctor' },
       { $set: updates }
     );
 
-    const user = await usersCollection.findOne({ _id: userId, role: 'doctor' });
+    const user = await usersCollection.findOne({ _id: fallbackUserId, role: 'doctor' });
     return user ? this.mapUserToDoctor(user) : null;
   }
 
@@ -131,6 +155,11 @@ class DoctorService {
     const userId = this.toObjectId(id);
     if (!userId) {
       return null;
+    }
+
+    const doctorByUserId = await Doctor.findOne({ userId });
+    if (doctorByUserId) {
+      return doctorByUserId.availability;
     }
 
     const usersCollection = mongoose.connection.collection('users');

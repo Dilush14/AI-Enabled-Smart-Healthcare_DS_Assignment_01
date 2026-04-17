@@ -19,11 +19,15 @@ import BookAppointment from './pages/patient/BookAppointment';
 import VideoConsultation from './pages/patient/VideoConsultation';
 import PatientReports from './pages/patient/PatientReports';
 import PatientSettings from './pages/patient/PatientSettings';
+import PatientCalendar from './pages/patient/PatientCalendar';
+import PatientPayment from './pages/patient/PatientPayment';
+import NotificationsPage from './pages/NotificationsPage';
 
 // Doctor Pages
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import ManageSchedule from './pages/doctor/ManageSchedule';
 import DoctorConsultation from './pages/doctor/DoctorConsultation';
+import DoctorCalendar from './pages/doctor/DoctorCalendar';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -32,6 +36,7 @@ import AnalyticsOverview from './pages/admin/AnalyticsOverview';
 
 const patientLinks = [
   { name: 'Dashboard', path: '/patient/dashboard', icon: Home },
+  { name: 'My Calendar', path: '/patient/calendar', icon: Calendar },
   { name: 'Find Doctors', path: '/patient/doctors', icon: Users },
   { name: 'My Reports', path: '/patient/reports', icon: FileText },
   { name: 'Settings', path: '/patient/settings', icon: Settings },
@@ -39,6 +44,7 @@ const patientLinks = [
 
 const doctorLinks = [
   { name: 'Dashboard', path: '/doctor/dashboard', icon: Home },
+  { name: 'Calendar', path: '/doctor/calendar', icon: Calendar },
   { name: 'My Schedule', path: '/doctor/schedule', icon: Calendar },
   { name: 'Settings', path: '/doctor/settings', icon: Settings },
 ];
@@ -99,11 +105,14 @@ function App() {
         >
           <Route index element={<Navigate to="/patient/dashboard" replace />} />
           <Route path="dashboard" element={<PatientDashboard />} />
+          <Route path="calendar" element={<PatientCalendar />} />
+          <Route path="payments/:appointmentId" element={<PatientPayment />} />
           <Route path="doctors" element={<BrowseDoctors />} />
           <Route path="doctors/:id" element={<DoctorProfile />} />
           <Route path="book/:id" element={<BookAppointment />} />
           <Route path="consultation/:id" element={<VideoConsultation />} />
           <Route path="reports" element={<PatientReports />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="settings" element={<PatientSettings />} />
         </Route>
 
@@ -118,8 +127,10 @@ function App() {
         >
           <Route index element={<Navigate to="/doctor/dashboard" replace />} />
           <Route path="dashboard" element={<DoctorDashboard />} />
+          <Route path="calendar" element={<DoctorCalendar />} />
           <Route path="schedule" element={<ManageSchedule />} />
           <Route path="consultation/:id" element={<DoctorConsultation />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="settings" element={<PatientSettings />} />
         </Route>
 
@@ -136,6 +147,7 @@ function App() {
            <Route path="dashboard" element={<AdminDashboard />} />
            <Route path="users" element={<UserManagement />} />
            <Route path="analytics" element={<AnalyticsOverview />} />
+            <Route path="notifications" element={<NotificationsPage />} />
         </Route>
       </Routes>
     </Router>

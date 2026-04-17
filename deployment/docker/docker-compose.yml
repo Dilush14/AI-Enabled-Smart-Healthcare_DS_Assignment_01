@@ -1,0 +1,183 @@
+version: '3.9'
+
+name: smart-healthcare
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME}
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-service:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/user-service/Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  doctor-service:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/doctor-service/Dockerfile
+    container_name: doctor-service
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+
+  appointment-service:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/appointment-service/Dockerfile
+    container_name: appointment-service
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3003
+      API_GATEWAY_URL: http://api-gateway:3000
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006/api/notifications/internal
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      notification-service:
+        condition: service_started
+    ports:
+      - "3003:3003"
+
+  telemedicine-service:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/telemedicine-service/Dockerfile
+    container_name: telemedicine-service
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3004
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "3004:3004"
+    volumes:
+      - telemedicine_uploads:/uploads
+
+  payment-service:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/payment-service/Dockerfile
+    container_name: payment-service
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3005
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006/api/notifications/internal
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      notification-service:
+        condition: service_started
+    ports:
+      - "3005:3005"
+
+  notification-service:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/notification-service/Dockerfile
+    container_name: notification-service
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3006
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "3006:3006"
+
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/api-gateway/Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    env_file:
+      - ../config/.env.docker
+    environment:
+      PORT: 3000
+      USER_SERVICE_URL: http://user-service:3001
+      DOCTOR_SERVICE_URL: http://doctor-service:3002
+      APPOINTMENT_SERVICE_URL: http://appointment-service:3003
+      TELEMEDICINE_SERVICE_URL: http://telemedicine-service:3004
+      PAYMENT_SERVICE_URL: http://payment-service:3005
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006
+    depends_on:
+      user-service:
+        condition: service_started
+      doctor-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      telemedicine-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/frontend/Dockerfile
+      args:
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY}
+    container_name: frontend
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "5173:80"
+
+volumes:
+  mongodb_data:
+  telemedicine_uploads:
