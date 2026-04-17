@@ -4,11 +4,12 @@ import { Link } from 'react-router-dom';
 export default function DoctorCard({ doctor }) {
   const doctorId = doctor._id || doctor.id;
   const displayName = doctor.userId?.name || doctor.name || 'Doctor';
-  const specialty = doctor.specialization || doctor.specialty || 'Specialist';
-  const location = doctor.userId?.address || doctor.location || 'Location not available';
+  const specialty = doctor.specialization || doctor.specialty || '';
+  const location = doctor.clinicAddress || doctor.userId?.address || doctor.location || '';
   const profileImage = doctor.userId?.profilePhotoUrl || doctor.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0EA5E9&color=fff`;
-  const rating = doctor.rating || '4.9';
-  const experience = doctor.experience || 0;
+  const rating = Number(doctor.ratingAverage || doctor.rating || 0);
+  const ratingCount = Number(doctor.ratingCount || 0);
+  const experience = Number(doctor.experience || 0);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group max-w-sm">
@@ -25,17 +26,18 @@ export default function DoctorCard({ doctor }) {
           <div className="flex justify-between items-start">
             <div>
               <h3 className="font-bold text-lg text-text group-hover:text-primary transition-colors line-clamp-1">{displayName}</h3>
-              <p className="text-secondary text-sm font-medium">{specialty}</p>
+              <p className="text-secondary text-sm font-medium">{specialty || 'Specialization not added'}</p>
             </div>
             <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
               <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-              <span className="text-sm font-bold text-yellow-700">{rating}</span>
+              <span className="text-sm font-bold text-yellow-700">{rating > 0 ? rating.toFixed(1) : '-'}</span>
             </div>
           </div>
+          <p className="mt-1 text-xs text-gray-500">{ratingCount} ratings</p>
           <div className="mt-3 space-y-1.5">
             <div className="flex items-center gap-2 text-gray-500 text-sm">
               <MapPin className="w-4 h-4 text-gray-400" />
-              <span className="truncate">{location}</span>
+              <span className="truncate">{location || 'Address not added'}</span>
             </div>
             <div className="flex items-center gap-2 text-gray-500 text-sm">
               <Clock className="w-4 h-4 text-gray-400" />

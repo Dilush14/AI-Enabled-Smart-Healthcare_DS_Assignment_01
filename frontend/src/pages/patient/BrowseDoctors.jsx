@@ -23,7 +23,9 @@ export default function BrowseDoctors() {
       try {
         setLoading(true);
         setError('');
-        const params = activeSpecialty === 'All' ? {} : { specialization: activeSpecialty };
+        const params = activeSpecialty === 'All'
+          ? { verified: 'true' }
+          : { specialization: activeSpecialty, verified: 'true' };
         const response = await DoctorService.getDoctors(params);
         const normalizedDoctors = Array.isArray(response)
           ? response.map(normalizeDoctor)

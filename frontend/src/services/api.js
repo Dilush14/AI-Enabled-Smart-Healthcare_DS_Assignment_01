@@ -54,6 +54,22 @@ export const DoctorService = {
   getAvailability: (id) => api.get(`/doctors/${id}/availability`),
   updateDoctor: (id, data) => api.put(`/doctors/${id}`, data),
   verifyDoctor: (id) => api.put(`/doctors/${id}/verify`),
+  rateDoctor: (id, data) => api.put(`/doctors/${id}/rating`, data),
+  uploadIdProof: (id, formData) => {
+    const apiWithFormData = axios.create({
+      baseURL: '/api',
+      timeout: 30000,
+    });
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      apiWithFormData.defaults.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return apiWithFormData
+      .put(`/doctors/${id}/id-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .then((res) => res.data);
+  },
 };
 
 export const AppointmentService = {

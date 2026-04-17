@@ -28,7 +28,7 @@ export default function UserManagement() {
             _id: user._id,
             userId: user,
             specialization: user.specialization || 'General Physician',
-            licenseNumber: user.licenseNumber || 'N/A',
+            licenseNumber: user.licenseNumber || '',
             isVerified: user.isVerified || false,
             createdAt: user.createdAt,
           }));
@@ -84,11 +84,37 @@ export default function UserManagement() {
     });
   };
 
+  const getIdProofUrl = (doctorRecord) => {
+    if (!doctorRecord || typeof doctorRecord !== 'object') {
+      return '';
+    }
+
+    const candidates = [
+      doctorRecord.idProofUrl,
+      doctorRecord.idProofDocumentUrl,
+      doctorRecord.governmentIdProofUrl,
+      doctorRecord.licenseDocumentUrl,
+      doctorRecord.licenseProofUrl,
+      doctorRecord.licenseImageUrl,
+      doctorRecord.userId?.idProofUrl,
+      doctorRecord.userId?.idProofDocumentUrl,
+      doctorRecord.userId?.governmentIdProofUrl,
+      doctorRecord.userId?.licenseDocumentUrl,
+      doctorRecord.userId?.licenseProofUrl,
+      doctorRecord.userId?.licenseImageUrl,
+    ];
+
+    const found = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+    return found || '';
+  };
+
   const mappedDoctors = useMemo(() => doctors.map((doc) => ({
     id: doc._id,
     name: doc.userId?.name || 'Doctor',
     roleOrSpecialty: doc.specialization,
     licenseOrId: doc.licenseNumber,
+    idProofUrl: getIdProofUrl(doc),
+    isDoctor: true,
     hasIdProof: hasIdProof(doc),
     status: doc.isVerified ? 'Verified' : 'Pending',
     joined: doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : '-',
@@ -99,6 +125,8 @@ export default function UserManagement() {
     name: user.name,
     roleOrSpecialty: 'Patient',
     licenseOrId: user.email,
+    idProofUrl: '',
+    isDoctor: false,
     status: 'Active',
     joined: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-',
   })), [patients]);
@@ -204,9 +232,30 @@ export default function UserManagement() {
                   </td>
                   <td className="p-6 text-gray-600 font-medium">{row.roleOrSpecialty}</td>
                   <td className="p-6 text-gray-500 font-medium">
-                    <div className="flex items-center gap-2">
-                       <FileText className="w-4 h-4 text-gray-400" /> {row.licenseOrId}
-                    </div>
+                    {row.isDoctor ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                          <span>{row.licenseOrId || '-'}</span>
+                        </div>
+                        {row.idProofUrl ? (
+                          <a
+                            href={row.idProofUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block text-xs font-bold text-primary hover:text-secondary hover:underline"
+                          >
+                            View Uploaded ID
+                          </a>
+                        ) : (
+                          <span className="inline-block text-xs font-semibold text-amber-700">Not uploaded</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-gray-400" /> {row.licenseOrId}
+                      </div>
+                    )}
                   </td>
                   <td className="p-6">
                     <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${

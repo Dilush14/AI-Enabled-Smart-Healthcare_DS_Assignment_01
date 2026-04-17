@@ -6,6 +6,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const connectDB = require('./config/database');
+require('./models/User');
 const doctorRoutes = require('./routes/doctors');
 const errorHandler = require('./middlewares/errorHandler');
 
