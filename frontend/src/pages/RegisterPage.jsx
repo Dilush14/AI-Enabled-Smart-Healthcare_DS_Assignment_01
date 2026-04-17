@@ -1,4 +1,4 @@
-import { Activity, User, Mail, Lock, Briefcase, ArrowRight } from 'lucide-react';
+import { Activity, User, Mail, Lock, Briefcase, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { UserService } from '../services/api';
@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const [role, setRole] = useState('patient');
   const [form, setForm] = useState({ name: '', email: '', password: '', specialization: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -162,13 +163,21 @@ export default function RegisterPage() {
                 </div>
                 <input
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={form.password}
                   onChange={handleChange}
-                  className="focus:ring-2 focus:ring-primary/20 focus:border-primary block w-full pl-10 sm:text-sm border-gray-200 rounded-xl h-12 bg-gray-50 border outline-none transition-all"
+                  className="focus:ring-2 focus:ring-primary/20 focus:border-primary block w-full pl-10 pr-12 sm:text-sm border-gray-200 rounded-xl h-12 bg-gray-50 border outline-none transition-all"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 
