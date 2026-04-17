@@ -5,6 +5,14 @@ const User = require('../models/User');
 const emailService = require('./emailService');
 
 class AuthService {
+  generateResetOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
+  hashOtp(otp) {
+    return crypto.createHash('sha256').update(String(otp)).digest('hex');
+  }
+
   async register(userData) {
     const { name, email, password, role, specialization } = userData;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -32,32 +40,50 @@ class AuthService {
       return null;
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    const otp = this.generateResetOtp();
+    user.resetPasswordOtpHash = this.hashOtp(otp);
+    user.resetPasswordOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
     user.updatedAt = new Date();
     await user.save();
 
-    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetLink = `${frontendBaseUrl}/reset-password/${resetToken}`;
-    await emailService.sendPasswordResetEmail(user.email, resetLink, user.name);
+    try {
+      await emailService.sendPasswordResetOtpEmail(user.email, otp, user.name);
+    } catch (error) {
+      // Keep forgot-password response non-blocking so users can still continue with OTP if delivery is delayed.
+      console.error('Password reset OTP email dispatch failed:', error.message);
+    }
 
-    return resetToken;
+    return true;
   }
 
-  async resetPassword(token, newPassword) {
+  async verifyPasswordResetOtp(email, otp) {
     const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: new Date() },
+      email,
+      resetPasswordOtpExpires: { $gt: new Date() },
     });
 
     if (!user) {
-      throw new Error('Invalid or expired reset token');
+      throw new Error('Invalid or expired OTP');
+    }
+
+    if (user.resetPasswordOtpHash !== this.hashOtp(otp)) {
+      throw new Error('Invalid or expired OTP');
+    }
+
+    return true;
+  }
+
+  async resetPassword(email, otp, newPassword) {
+    await this.verifyPasswordResetOtp(email, otp);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw new Error('User not found');
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
+    user.resetPasswordOtpHash = undefined;
+    user.resetPasswordOtpExpires = undefined;
     user.updatedAt = new Date();
     await user.save();
 
