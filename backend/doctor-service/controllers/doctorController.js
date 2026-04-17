@@ -30,6 +30,36 @@ const updateDoctor = async (req, res) => {
   }
 };
 
+const uploadIdProof = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Please upload an image file for ID proof.' });
+    }
+
+    const doctor = await doctorService.uploadIdProof(req.params.id, req.file, req.user);
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    return res.json(doctor);
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message });
+  }
+};
+
+const addDoctorRating = async (req, res) => {
+  try {
+    const doctor = await doctorService.addDoctorRating(req.params.id, req.body, req.user);
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    return res.json(doctor);
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message });
+  }
+};
+
 const verifyDoctor = async (req, res) => {
   try {
     const doctor = await doctorService.verifyDoctor(req.params.id);
@@ -50,4 +80,4 @@ const getAvailability = async (req, res) => {
   }
 };
 
-module.exports = { getDoctors, getDoctor, updateDoctor, verifyDoctor, getAvailability };
+module.exports = { getDoctors, getDoctor, updateDoctor, uploadIdProof, addDoctorRating, verifyDoctor, getAvailability };

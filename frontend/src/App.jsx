@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Home, Calendar, Users, FileText, Settings, Activity, PieChart } from 'lucide-react';
+import { Home, Calendar, Users, User, FileText, Settings, Activity, PieChart } from 'lucide-react';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -30,6 +30,7 @@ import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import ManageSchedule from './pages/doctor/ManageSchedule';
 import DoctorConsultation from './pages/doctor/DoctorConsultation';
 import DoctorCalendar from './pages/doctor/DoctorCalendar';
+import DoctorProfileSettings from './pages/doctor/DoctorProfileSettings';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -46,6 +47,7 @@ const patientLinks = [
 
 const doctorLinks = [
   { name: 'Dashboard', path: '/doctor/dashboard', icon: Home },
+  { name: 'Profile', path: '/doctor/profile', icon: User },
   { name: 'Calendar', path: '/doctor/calendar', icon: Calendar },
   { name: 'My Schedule', path: '/doctor/schedule', icon: Calendar },
   { name: 'Settings', path: '/doctor/settings', icon: Settings },
@@ -131,11 +133,12 @@ function App() {
         >
           <Route index element={<Navigate to="/doctor/dashboard" replace />} />
           <Route path="dashboard" element={<DoctorDashboard />} />
+          <Route path="profile" element={<DoctorProfileSettings />} />
           <Route path="calendar" element={<DoctorCalendar />} />
           <Route path="schedule" element={<ManageSchedule />} />
           <Route path="consultation/:id" element={<DoctorConsultation />} />
           <Route path="notifications" element={<NotificationsPage />} />
-          <Route path="settings" element={<PatientSettings />} />
+          <Route path="settings" element={<DoctorProfileSettings />} />
         </Route>
 
         {/* Admin Routes */}

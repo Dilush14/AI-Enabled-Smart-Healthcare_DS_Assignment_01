@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, User, FileText, Search } from 'lucide-react';
+import { Calendar, User, FileText, Search, Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppointmentService, DoctorService, TelemedicineService } from '../../services/api';
 import AppointmentCard from '../../components/AppointmentCard';
@@ -23,6 +23,9 @@ export default function PatientDashboard() {
   const [error, setError] = useState('');
   const [reportsCount, setReportsCount] = useState(0);
   const [healthReminders, setHealthReminders] = useState([]);
+  const [ratingDrafts, setRatingDrafts] = useState({});
+  const [ratingSubmittingDoctorId, setRatingSubmittingDoctorId] = useState('');
+  const [ratingMessage, setRatingMessage] = useState('');
 
   const reminderTheme = {
     diet: { bar: 'bg-orange-500', label: 'Diet' },
@@ -47,6 +50,34 @@ export default function PatientDashboard() {
 
   const handlePayAppointment = async (appointmentId) => {
     navigate(`/patient/payments/${appointmentId}`);
+  };
+
+  const handleRatingStarClick = (doctorId, value) => {
+    setRatingMessage('');
+    setRatingDrafts((prev) => ({
+      ...prev,
+      [doctorId]: value,
+    }));
+  };
+
+  const handleSubmitRating = async (doctorId) => {
+    const selectedRating = Number(ratingDrafts[doctorId] || 0);
+    if (!selectedRating) {
+      setRatingMessage('Please select a rating before submitting.');
+      return;
+    }
+
+    try {
+      setRatingSubmittingDoctorId(doctorId);
+      setRatingMessage('');
+      await DoctorService.rateDoctor(doctorId, { rating: selectedRating });
+      setRatingMessage('Rating submitted successfully.');
+      await loadAppointments();
+    } catch (err) {
+      setRatingMessage(err?.response?.data?.message || 'Failed to submit rating');
+    } finally {
+      setRatingSubmittingDoctorId('');
+    }
   };
 
   const loadAppointments = async () => {
@@ -165,6 +196,7 @@ export default function PatientDashboard() {
 
         return {
           id: app._id,
+          doctorId: doctor._id || doctor.id || doctorLookupId || '',
           doctorName,
           specialty,
           date: formatDate(app.date),
@@ -185,6 +217,35 @@ export default function PatientDashboard() {
 
   const upcomingAppointments = mappedAppointments.filter((app) => app.status === 'Upcoming');
   const pastAppointments = mappedAppointments.filter((app) => app.status !== 'Upcoming');
+
+  const doctorsToRate = useMemo(() => {
+    const completed = mappedAppointments.filter((app) => app.status === 'Completed' && app.doctorId);
+    const unique = new Map();
+
+    completed.forEach((app) => {
+      if (unique.has(app.doctorId)) {
+        return;
+      }
+
+      const doctorDetails = doctorsById[app.doctorId] || {};
+      const ratingsList = Array.isArray(doctorDetails.ratings) ? doctorDetails.ratings : [];
+      const myRatingEntry = ratingsList.find((entry) => {
+        const patientId = entry?.patientId?._id || entry?.patientId;
+        return String(patientId || '') === String(currentUser?._id || '');
+      });
+
+      unique.set(app.doctorId, {
+        doctorId: app.doctorId,
+        doctorName: app.doctorName,
+        specialty: app.specialty,
+        averageRating: Number(doctorDetails.ratingAverage || 0),
+        ratingCount: Number(doctorDetails.ratingCount || 0),
+        myRating: Number(myRatingEntry?.rating || 0),
+      });
+    });
+
+    return Array.from(unique.values());
+  }, [mappedAppointments, doctorsById, currentUser?._id]);
 
   return (
     <div className="space-y-6">
@@ -303,6 +364,63 @@ export default function PatientDashboard() {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-text">Rate Your Doctors</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              {ratingMessage && (
+                <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700">
+                  {ratingMessage}
+                </p>
+              )}
+              {doctorsToRate.length === 0 ? (
+                <p className="text-sm text-gray-500">Complete an appointment to add a doctor rating.</p>
+              ) : (
+                doctorsToRate.map((item) => {
+                  const selectedRating = Number(ratingDrafts[item.doctorId] || item.myRating || 0);
+
+                  return (
+                    <div key={item.doctorId} className="rounded-xl border border-gray-100 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="font-bold text-text text-sm">{item.doctorName}</h4>
+                          <p className="text-xs text-gray-500">{item.specialty}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-gray-500">Avg</p>
+                          <p className="text-sm font-bold text-text">{item.averageRating > 0 ? item.averageRating.toFixed(1) : '-'}</p>
+                          <p className="text-[11px] text-gray-500">{item.ratingCount} ratings</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <button
+                            key={`${item.doctorId}-${value}`}
+                            onClick={() => handleRatingStarClick(item.doctorId, value)}
+                            className="p-1"
+                            title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                          >
+                            <Star className={`w-5 h-5 ${value <= selectedRating ? 'text-yellow-500 fill-yellow-400' : 'text-gray-300'}`} />
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => handleSubmitRating(item.doctorId)}
+                        disabled={ratingSubmittingDoctorId === item.doctorId}
+                        className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-secondary disabled:opacity-60"
+                      >
+                        {ratingSubmittingDoctorId === item.doctorId ? 'Saving...' : 'Submit Rating'}
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
