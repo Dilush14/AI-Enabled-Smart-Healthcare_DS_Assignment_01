@@ -56,6 +56,7 @@ export const DoctorService = {
 
 export const AppointmentService = {
   getAppointments: () => api.get('/appointments'),
+  getAppointmentById: (id) => api.get(`/appointments/${id}`),
   getAvailableSlots: (doctorId, date) => api.get(`/appointments/doctors/${doctorId}/slots`, { params: { date } }),
   bookAppointment: (data) => api.post('/appointments/book', data),
   cancelAppointment: (id) => api.put(`/appointments/${id}/cancel`),
@@ -64,6 +65,7 @@ export const AppointmentService = {
 
 export const PaymentService = {
   processPayment: (paymentData) => api.post('/payments/create', paymentData),
+  getPaymentByAppointment: (appointmentId) => api.get(`/payments/appointment/${appointmentId}`),
   getPaymentsHistory: () => api.get('/payments/history'),
   verifyPayment: (id) => api.put(`/payments/${id}/verify`),
 };
@@ -100,7 +102,8 @@ export const TelemedicineService = {
 };
 
 export const NotificationService = {
-  getNotifications: () => api.get('/notifications'),
+  getNotifications: (params) => api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
   markAsRead: (id) => api.put(`/notifications/${id}/read`),
   markAllAsRead: () => api.put('/notifications/read-all'),
 };

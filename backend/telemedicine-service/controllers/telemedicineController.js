@@ -91,7 +91,8 @@ const uploadReport = async (req, res) => {
       doctorId,
       appointmentId,
       req.file,
-      reportType
+      reportType,
+      req.user?.role || 'patient'
     );
 
     res.status(201).json({
