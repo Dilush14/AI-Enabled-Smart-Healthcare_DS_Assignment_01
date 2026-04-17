@@ -1,6 +1,8 @@
 import { Download, Calendar as CalendarIcon, Filter, TrendingUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AppointmentService, PaymentService } from '../../services/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function AnalyticsOverview() {
   const [range, setRange] = useState('month');
@@ -67,6 +69,84 @@ export default function AnalyticsOverview() {
     cancelled: appointmentsInRange.filter((a) => a.status === 'cancelled').length,
   };
 
+  const formatDate = (value) => {
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const handleExportPdf = () => {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const periodLabel = range === 'week' ? 'Last 7 Days' : range === 'quarter' ? 'Last 90 Days' : 'Last 30 Days';
+    const generatedAt = new Date().toLocaleString('en-US');
+
+    doc.setFontSize(18);
+    doc.text('MedikaLine Analytics Report', 40, 48);
+    doc.setFontSize(10);
+    doc.text(`Period: ${periodLabel}`, 40, 68);
+    doc.text(`Generated: ${generatedAt}`, 40, 84);
+
+    autoTable(doc, {
+      startY: 102,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Revenue (Completed Payments)', `$${revenueTotal.toFixed(2)}`],
+        ['Total Payments (In Range)', String(paymentsInRange.length)],
+        ['Total Appointments (In Range)', String(appointmentsInRange.length)],
+        ['Pending Appointments', String(appointmentsByStatus.pending)],
+        ['Confirmed Appointments', String(appointmentsByStatus.confirmed)],
+        ['Completed Appointments', String(appointmentsByStatus.completed)],
+        ['Cancelled Appointments', String(appointmentsByStatus.cancelled)],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [37, 99, 235] },
+    });
+
+    const paymentsRows = paymentsInRange
+      .slice(0, 20)
+      .map((payment) => [
+        payment._id ? String(payment._id).slice(-8) : '-',
+        payment.status || '-',
+        `$${Number(payment.amount || 0).toFixed(2)}`,
+        formatDate(payment.createdAt),
+      ]);
+
+    autoTable(doc, {
+      startY: (doc.lastAutoTable?.finalY || 102) + 18,
+      head: [['Recent Payments (max 20)', 'Status', 'Amount', 'Created At']],
+      body: paymentsRows.length > 0 ? paymentsRows : [['-', '-', '-', '-']],
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129] },
+    });
+
+    const appointmentsRows = appointmentsInRange
+      .slice(0, 20)
+      .map((appointment) => [
+        appointment._id ? String(appointment._id).slice(-8) : '-',
+        appointment.status || '-',
+        appointment.time || '-',
+        formatDate(appointment.createdAt),
+      ]);
+
+    autoTable(doc, {
+      startY: (doc.lastAutoTable?.finalY || 102) + 18,
+      head: [['Recent Appointments (max 20)', 'Status', 'Time', 'Created At']],
+      body: appointmentsRows.length > 0 ? appointmentsRows : [['-', '-', '-', '-']],
+      theme: 'grid',
+      headStyles: { fillColor: [139, 92, 246] },
+    });
+
+    doc.save(`medikaline-analytics-${range}-${Date.now()}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -83,7 +163,11 @@ export default function AnalyticsOverview() {
                <option value="quarter">Last 90 Days</option>
              </select>
            </div>
-          <button className="bg-primary hover:bg-secondary text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm shadow-primary/30">
+          <button
+            onClick={handleExportPdf}
+            disabled={loading}
+            className="bg-primary hover:bg-secondary disabled:opacity-60 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm shadow-primary/30"
+          >
             <Download className="w-4 h-4" /> Export PDF
           </button>
         </div>
