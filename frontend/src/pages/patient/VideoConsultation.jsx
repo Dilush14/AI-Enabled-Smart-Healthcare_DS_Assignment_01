@@ -40,6 +40,11 @@ export default function VideoConsultation() {
 
         setAppointment(appointmentData);
 
+        const paymentStatus = (appointmentData.paymentStatus || 'pending').toLowerCase();
+        if (paymentStatus !== 'completed') {
+          throw new Error('Payment is required before starting this video consultation. Please complete payment first.');
+        }
+
         let sessionData = null;
         try {
           const existingSessionResponse = await TelemedicineService.getSessionByAppointment(appointmentId);
@@ -85,7 +90,17 @@ export default function VideoConsultation() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
-          {error}
+          <div className="space-y-3">
+            <p>{error}</p>
+            {appointment && (appointment.paymentStatus || '').toLowerCase() !== 'completed' && (
+              <Link
+                to={`/patient/payments/${appointmentId}`}
+                className="inline-flex items-center bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl font-bold transition-colors"
+              >
+                Pay Now
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
@@ -100,6 +115,49 @@ export default function VideoConsultation() {
         ) : (
           <div className="bg-white border border-gray-100 rounded-2xl p-6 text-gray-500">
             Consultation room is not available yet.
+          </div>
+        )}
+
+        {session && (
+          <div className="mt-4 bg-white border border-gray-100 rounded-2xl p-6">
+            <h2 className="text-lg font-bold text-text mb-4">Doctor Notes & Prescription</h2>
+
+            {!session?.consultationNotes
+              && !session?.prescription?.diagnosis
+              && !session?.prescription?.medication
+              && !session?.prescription?.followUpAdvice ? (
+              <p className="text-sm text-gray-500">Your doctor has not shared notes or prescription details yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {session?.consultationNotes ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Consultation Notes</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{session.consultationNotes}</p>
+                  </div>
+                ) : null}
+
+                {session?.prescription?.diagnosis ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Diagnosis</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{session.prescription.diagnosis}</p>
+                  </div>
+                ) : null}
+
+                {session?.prescription?.medication ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Medication</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{session.prescription.medication}</p>
+                  </div>
+                ) : null}
+
+                {session?.prescription?.followUpAdvice ? (
+                  <div>
+                    <h3 className="text-sm font-bold text-text mb-1">Follow-up Advice</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{session.prescription.followUpAdvice}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
       </div>

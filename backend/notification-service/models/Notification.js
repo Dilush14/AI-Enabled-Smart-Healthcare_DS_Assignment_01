@@ -12,7 +12,13 @@ const notificationSchema = new mongoose.Schema({
       'appointment_completed',
       'payment_completed',
       'payment_failed',
-      'consultation_completed'
+      'consultation_completed',
+      'session_created',
+      'session_started',
+      'session_ended',
+      'report_uploaded',
+      'doctor_notes_added',
+      'ai_suggestions_ready'
     ],
     required: true
   },

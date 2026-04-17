@@ -46,11 +46,50 @@ export default function UserManagement() {
     loadData();
   }, []);
 
+  const hasIdProof = (doctorRecord) => {
+    if (!doctorRecord || typeof doctorRecord !== 'object') {
+      return false;
+    }
+
+    const candidates = [
+      doctorRecord.idProofUrl,
+      doctorRecord.idProof,
+      doctorRecord.idProofDocument,
+      doctorRecord.idProofDocumentUrl,
+      doctorRecord.governmentIdProofUrl,
+      doctorRecord.licenseDocumentUrl,
+      doctorRecord.licenseProofUrl,
+      doctorRecord.licenseImageUrl,
+      doctorRecord.userId?.idProofUrl,
+      doctorRecord.userId?.idProof,
+      doctorRecord.userId?.idProofDocument,
+      doctorRecord.userId?.idProofDocumentUrl,
+      doctorRecord.userId?.governmentIdProofUrl,
+      doctorRecord.userId?.licenseDocumentUrl,
+      doctorRecord.userId?.licenseProofUrl,
+      doctorRecord.userId?.licenseImageUrl,
+    ];
+
+    return candidates.some((candidate) => {
+      if (typeof candidate === 'string') {
+        return candidate.trim().length > 0;
+      }
+
+      if (candidate && typeof candidate === 'object') {
+        const nested = candidate.url || candidate.path || candidate.secure_url || candidate.location;
+        return typeof nested === 'string' && nested.trim().length > 0;
+      }
+
+      return false;
+    });
+  };
+
   const mappedDoctors = useMemo(() => doctors.map((doc) => ({
     id: doc._id,
     name: doc.userId?.name || 'Doctor',
     roleOrSpecialty: doc.specialization,
     licenseOrId: doc.licenseNumber,
+    hasIdProof: hasIdProof(doc),
     status: doc.isVerified ? 'Verified' : 'Pending',
     joined: doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : '-',
   })), [doctors]);
@@ -75,7 +114,12 @@ export default function UserManagement() {
     );
   }, [activeTab, mappedDoctors, mappedPatients, query]);
 
-  const handleVerifyDoctor = async (doctorId) => {
+  const handleVerifyDoctor = async (doctorId, canVerify) => {
+    if (!canVerify) {
+      setError('Doctor cannot be verified until an ID proof document is uploaded.');
+      return;
+    }
+
     try {
       await DoctorService.verifyDoctor(doctorId);
       await loadData();
@@ -177,7 +221,12 @@ export default function UserManagement() {
                   <td className="p-6">
                     {activeTab === 'doctors' && row.status === 'Pending' ? (
                        <div className="flex justify-center gap-2">
-                         <button onClick={() => handleVerifyDoctor(row.id)} className="p-2 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors" title="Approve">
+                         <button
+                           onClick={() => handleVerifyDoctor(row.id, row.hasIdProof)}
+                           disabled={!row.hasIdProof}
+                           className={`p-2 rounded-lg transition-colors ${row.hasIdProof ? 'bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                           title={row.hasIdProof ? 'Approve' : 'Upload ID proof required before approval'}
+                         >
                            <CheckCircle className="w-5 h-5" />
                          </button>
                          <button className="p-2 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" title="Reject">

@@ -10,6 +10,8 @@ import LandingPage from './pages/LandingPage';
 import AboutPage from './pages/AboutPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Patient Pages
 import PatientDashboard from './pages/patient/PatientDashboard';
@@ -20,6 +22,8 @@ import VideoConsultation from './pages/patient/VideoConsultation';
 import PatientReports from './pages/patient/PatientReports';
 import PatientSettings from './pages/patient/PatientSettings';
 import PatientCalendar from './pages/patient/PatientCalendar';
+import PatientPayment from './pages/patient/PatientPayment';
+import NotificationsPage from './pages/NotificationsPage';
 
 // Doctor Pages
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
@@ -89,6 +93,8 @@ function App() {
           <Route path="about" element={<AboutPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="doctors" element={<BrowseDoctors />} />
         </Route>
 
@@ -104,11 +110,13 @@ function App() {
           <Route index element={<Navigate to="/patient/dashboard" replace />} />
           <Route path="dashboard" element={<PatientDashboard />} />
           <Route path="calendar" element={<PatientCalendar />} />
+          <Route path="payments/:appointmentId" element={<PatientPayment />} />
           <Route path="doctors" element={<BrowseDoctors />} />
           <Route path="doctors/:id" element={<DoctorProfile />} />
           <Route path="book/:id" element={<BookAppointment />} />
           <Route path="consultation/:id" element={<VideoConsultation />} />
           <Route path="reports" element={<PatientReports />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="settings" element={<PatientSettings />} />
         </Route>
 
@@ -126,6 +134,7 @@ function App() {
           <Route path="calendar" element={<DoctorCalendar />} />
           <Route path="schedule" element={<ManageSchedule />} />
           <Route path="consultation/:id" element={<DoctorConsultation />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="settings" element={<PatientSettings />} />
         </Route>
 
@@ -142,6 +151,7 @@ function App() {
            <Route path="dashboard" element={<AdminDashboard />} />
            <Route path="users" element={<UserManagement />} />
            <Route path="analytics" element={<AnalyticsOverview />} />
+            <Route path="notifications" element={<NotificationsPage />} />
         </Route>
       </Routes>
     </Router>

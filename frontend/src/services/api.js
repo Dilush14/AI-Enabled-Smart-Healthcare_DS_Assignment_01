@@ -41,6 +41,8 @@ api.interceptors.response.use(
 export const UserService = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, password) => api.post('/auth/reset-password', { token, password }),
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/update', data),
   getAllUsers: () => api.get('/users'),
@@ -56,6 +58,7 @@ export const DoctorService = {
 
 export const AppointmentService = {
   getAppointments: () => api.get('/appointments'),
+  getAppointmentById: (id) => api.get(`/appointments/${id}`),
   getAvailableSlots: (doctorId, date) => api.get(`/appointments/doctors/${doctorId}/slots`, { params: { date } }),
   bookAppointment: (data) => api.post('/appointments/book', data),
   cancelAppointment: (id) => api.put(`/appointments/${id}/cancel`),
@@ -64,6 +67,7 @@ export const AppointmentService = {
 
 export const PaymentService = {
   processPayment: (paymentData) => api.post('/payments/create', paymentData),
+  getPaymentByAppointment: (appointmentId) => api.get(`/payments/appointment/${appointmentId}`),
   getPaymentsHistory: () => api.get('/payments/history'),
   verifyPayment: (id) => api.put(`/payments/${id}/verify`),
 };
@@ -74,6 +78,8 @@ export const TelemedicineService = {
   getSessionByAppointment: (appointmentId) => api.get(`/telemedicine/session/appointment/${appointmentId}`),
   updateSessionStatus: (id, status) => api.put(`/telemedicine/session/${id}/status`, { status }),
   endSession: (id, notes) => api.put(`/telemedicine/session/${id}/end`, { notes }),
+  updateConsultationNotes: (id, consultationNotes) => api.put(`/telemedicine/session/${id}/consultation-notes`, { consultationNotes }),
+  updatePrescription: (id, prescription) => api.put(`/telemedicine/session/${id}/prescription`, prescription),
   uploadReport: (formData) => {
     const apiWithFormData = axios.create({
       baseURL: '/api',
@@ -100,7 +106,8 @@ export const TelemedicineService = {
 };
 
 export const NotificationService = {
-  getNotifications: () => api.get('/notifications'),
+  getNotifications: (params) => api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
   markAsRead: (id) => api.put(`/notifications/${id}/read`),
   markAllAsRead: () => api.put('/notifications/read-all'),
 };

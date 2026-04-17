@@ -70,6 +70,42 @@ const endSession = async (req, res) => {
   }
 };
 
+const updateConsultationNotes = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { consultationNotes } = req.body;
+
+    const session = await telemedicineService.updateConsultationNotes(id, consultationNotes || '');
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    res.json({ success: true, message: 'Consultation notes saved', data: session });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updatePrescription = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { diagnosis, medication, followUpAdvice } = req.body;
+
+    const session = await telemedicineService.updatePrescription(id, {
+      diagnosis,
+      medication,
+      followUpAdvice,
+    });
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    res.json({ success: true, message: 'Prescription saved', data: session });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const uploadReport = async (req, res) => {
   try {
     if (!req.file) {
@@ -91,7 +127,8 @@ const uploadReport = async (req, res) => {
       doctorId,
       appointmentId,
       req.file,
-      reportType
+      reportType,
+      req.user?.role || 'patient'
     );
 
     res.status(201).json({
@@ -162,6 +199,8 @@ module.exports = {
   getSessionByAppointment,
   updateSessionStatus,
   endSession,
+  updateConsultationNotes,
+  updatePrescription,
   uploadReport,
   getReports,
   getReportById,

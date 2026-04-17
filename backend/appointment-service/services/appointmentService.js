@@ -44,11 +44,13 @@ class AppointmentService {
     }
 
     const doctor = await doctorsCollection.findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
-    if (!doctor?.userId) {
-      return { doctor, user: null };
+    if (doctor?.userId) {
+      const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctor.userId) });
+      return { doctor, user };
     }
 
-    const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctor.userId) });
+    // Fallback: some appointments may store doctor userId directly.
+    const user = await usersCollection.findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
     return { doctor, user };
   }
 
@@ -279,8 +281,10 @@ class AppointmentService {
         metadata: {
           appointmentId: appointment._id,
           doctorId: appointment.doctorId,
-          status: 'pending',
+          doctorName: doctorUser?.name || 'Doctor',
           patientName: patient?.name || '',
+          status: 'pending',
+          appointmentLabel,
         },
       }),
       doctorUser?._id ? sendNotification({
@@ -291,7 +295,10 @@ class AppointmentService {
         metadata: {
           appointmentId: appointment._id,
           patientId: appointment.patientId,
+          doctorName: doctorUser?.name || '',
+          patientName: patient?.name || 'Patient',
           status: 'pending',
+          appointmentLabel,
         },
       }) : Promise.resolve(),
     ]);
@@ -373,36 +380,74 @@ class AppointmentService {
     const appointmentLabel = this.formatAppointmentLabel(appointment);
 
     if (role === 'doctor' && status === 'confirmed') {
-      await sendNotification({
-        userId: appointment.patientId,
-        title: 'Appointment accepted',
-        type: 'appointment_accepted',
-        message: `Your appointment ${appointmentLabel} has been accepted. You can now pay for it.`,
-        metadata: {
-          appointmentId: appointment._id,
-          doctorId: appointment.doctorId,
-          status,
-        },
-      });
+      await Promise.all([
+        sendNotification({
+          userId: appointment.patientId,
+          title: 'Appointment accepted',
+          type: 'appointment_accepted',
+          message: `Your appointment ${appointmentLabel} has been accepted. You can now pay for it.`,
+          metadata: {
+            appointmentId: appointment._id,
+            doctorId: appointment.doctorId,
+            doctorName: doctorUser?.name || 'Doctor',
+            patientName: patient?.name || '',
+            status,
+            appointmentLabel,
+          },
+        }),
+        doctorUser?._id ? sendNotification({
+          userId: doctorUser._id,
+          title: 'Appointment accepted successfully',
+          type: 'appointment_accepted',
+          message: `You accepted the appointment ${appointmentLabel} for ${patient?.name || 'the patient'}.`,
+          metadata: {
+            appointmentId: appointment._id,
+            patientId: appointment.patientId,
+            doctorName: doctorUser?.name || '',
+            patientName: patient?.name || 'Patient',
+            status,
+            appointmentLabel,
+          },
+        }) : Promise.resolve(),
+      ]);
     }
 
     if (status === 'cancelled') {
-      const recipientId = role === 'patient' ? doctorUser?._id : appointment.patientId;
-      const recipientName = role === 'patient' ? `Dr. ${doctorUser?.name || 'your doctor'}` : patient?.name || 'the patient';
+      const cancelledByLabel = role === 'patient'
+        ? (patient?.name || 'The patient')
+        : `Dr. ${doctorUser?.name || 'your doctor'}`;
+      const actorId = role === 'patient' ? appointment.patientId : doctorUser?._id;
+      const counterpartId = role === 'patient' ? doctorUser?._id : appointment.patientId;
 
-      if (recipientId) {
-        await sendNotification({
-          userId: recipientId,
+      await Promise.all([
+        counterpartId ? sendNotification({
+          userId: counterpartId,
           title: 'Appointment cancelled',
           type: 'appointment_cancelled',
-          message: `${patient?.name || 'The patient'} cancelled the appointment ${appointmentLabel}.`,
+          message: `${cancelledByLabel} cancelled the appointment ${appointmentLabel}.`,
           metadata: {
             appointmentId: appointment._id,
             cancelledBy: role,
-            recipientName,
+            counterpartyId: actorId,
+            doctorName: doctorUser?.name || '',
+            patientName: patient?.name || '',
+            appointmentLabel,
           },
-        });
-      }
+        }) : Promise.resolve(),
+        actorId ? sendNotification({
+          userId: actorId,
+          title: 'Appointment cancellation confirmed',
+          type: 'appointment_cancelled',
+          message: `You cancelled the appointment ${appointmentLabel}.`,
+          metadata: {
+            appointmentId: appointment._id,
+            cancelledBy: role,
+            doctorName: doctorUser?.name || '',
+            patientName: patient?.name || '',
+            appointmentLabel,
+          },
+        }) : Promise.resolve(),
+      ]);
     }
 
     if (role === 'doctor' && status === 'completed') {
@@ -414,7 +459,10 @@ class AppointmentService {
         metadata: {
           appointmentId: appointment._id,
           doctorId: appointment.doctorId,
+          doctorName: doctorUser?.name || 'Doctor',
+          patientName: patient?.name || '',
           status,
+          appointmentLabel,
         },
       });
     }
